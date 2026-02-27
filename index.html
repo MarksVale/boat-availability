@@ -439,14 +439,29 @@
 </div>
 
 <script>
-const SUBMIT_URL = 'https://boat-availability.vercel.app/api/submit-booking';
+const API_BASE = 'https://boat-availability.vercel.app/api';
 
-const ROUTES = {
-  Salaca: [
-    { name: 'Mazsalaca → Līču skola', days: 1, hub: 'Mazsalaca' },
-    { name: 'Mazsalaca → Staicele', days: 2, hub: 'Mazsalaca' }
-  ]
-};
+let allRivers = [];
+let allRoutes = [];
+
+async function loadFormData() {
+  try {
+    const res = await fetch(API_BASE + '/get-form-data');
+    const data = await res.json();
+    allRivers = data.rivers || [];
+    allRoutes = data.routes || [];
+
+    const riverEl = document.getElementById('river');
+    riverEl.innerHTML = '<option value="">-- Izveleties upi --</option>';
+    allRivers.forEach(r => {
+      riverEl.innerHTML += '<option value="' + r.id + '">' + r.name + '</option>';
+    });
+  } catch(e) {
+    console.error('Failed to load form data', e);
+  }
+}
+
+loadFormData();
 
 const riverEl = document.getElementById('river');
 const routeEl = document.getElementById('route');
@@ -462,63 +477,48 @@ const availText = document.getElementById('availText');
 const availSpinner = document.getElementById('availSpinner');
 const submitBtn = document.getElementById('submitBtn');
 
-// Set min date to today
 const today = new Date().toISOString().split('T')[0];
 startDateEl.min = today;
 endDateEl.min = today;
 
-// River → Route
 riverEl.addEventListener('change', () => {
-  const river = riverEl.value;
-  routeEl.innerHTML = '<option value="">— Izvēlieties maršrutu —</option>';
-  routeEl.disabled = !river;
-  if (river && ROUTES[river]) {
-    ROUTES[river].forEach((r, i) => {
-      routeEl.innerHTML += `<option value="${i}">${r.name} (${r.days} ${r.days === 1 ? 'diena' : 'dienas'})</option>`;
+  const riverId = riverEl.value;
+  routeEl.innerHTML = '<option value="">-- Izveleties marsrutu --</option>';
+  routeEl.disabled = !riverId;
+  if (riverId) {
+    const riverRoutes = allRoutes.filter(r => r.riverId === riverId);
+    riverRoutes.forEach(r => {
+      routeEl.innerHTML += '<option value="' + r.id + '" data-hub="' + r.hubName + '">' + r.name + '</option>';
     });
   }
   resetAvailability();
 });
 
-// Route → auto-set end date
-routeEl.addEventListener('change', () => {
-  updateEndDate();
-  checkAvailability();
-});
-
-startDateEl.addEventListener('change', () => {
-  updateEndDate();
-  checkAvailability();
-});
-
-function updateEndDate() {
-  const river = riverEl.value;
-  const routeIdx = routeEl.value;
-  if (!river || routeIdx === '' || !startDateEl.value) return;
-  const route = ROUTES[river][routeIdx];
-  const start = new Date(startDateEl.value);
-  start.setDate(start.getDate() + route.days);
-  endDateEl.value = start.toISOString().split('T')[0];
-  updateSummary();
-}
-
+routeEl.addEventListener('change', () => { checkAvailability(); });
+startDateEl.addEventListener('change', () => { updateSummary(); checkAvailability(); });
+endDateEl.addEventListener('change', () => { updateSummary(); checkAvailability(); });
 kayaksEl.addEventListener('input', () => { updateSummary(); checkAvailability(); });
 canoesEl.addEventListener('input', () => { updateSummary(); checkAvailability(); });
+
+function getDays() {
+  if (!startDateEl.value || !endDateEl.value) return 0;
+  const start = new Date(startDateEl.value);
+  const end = new Date(endDateEl.value);
+  return Math.round((end - start) / 86400000) + 1;
+}
+
+function getSelectedHub() {
+  const opt = routeEl.options[routeEl.selectedIndex];
+  return opt ? opt.getAttribute('data-hub') : '';
+}
 
 function updateSummary() {
   const kayaks = parseInt(kayaksEl.value) || 0;
   const canoes = parseInt(canoesEl.value) || 0;
-  const seats = kayaks * 2 + canoes * 3;
-  totalSeatsEl.textContent = seats;
-
-  if (startDateEl.value && endDateEl.value) {
-    const start = new Date(startDateEl.value);
-    const end = new Date(endDateEl.value);
-    const days = Math.round((end - start) / (1000 * 60 * 60 * 24));
-    totalDaysEl.textContent = days > 0 ? days : '—';
-    const price = (kayaks + canoes) * 30 * (days > 0 ? days : 0);
-    totalPriceEl.textContent = `€${price}`;
-  }
+  totalSeatsEl.textContent = kayaks * 2 + canoes * 3;
+  const days = getDays();
+  totalDaysEl.textContent = days > 0 ? days : '--';
+  totalPriceEl.textContent = (kayaks + canoes) * 30 * (days > 0 ? days : 0) + ' EUR';
 }
 
 let availTimer = null;
@@ -528,49 +528,37 @@ function checkAvailability() {
 }
 
 async function _checkAvailability() {
-  const river = riverEl.value;
-  const routeIdx = routeEl.value;
+  const hub = getSelectedHub();
   const kayaks = parseInt(kayaksEl.value) || 0;
   const canoes = parseInt(canoesEl.value) || 0;
-
-  if (!river || routeIdx === '' || !startDateEl.value || !endDateEl.value || (kayaks + canoes) === 0) {
-    resetAvailability();
-    return;
-  }
-
-  const route = ROUTES[river][routeIdx];
-  const hub = route.hub;
-
+  if (!hub || !startDateEl.value || !endDateEl.value || (kayaks + canoes) === 0) { resetAvailability(); return; }
+  
   availBar.className = 'availability-bar checking';
   availSpinner.style.display = 'block';
-  availText.textContent = 'Pārbaudām pieejamību...';
-
+  availText.textContent = 'Parbaudam pieejambu...';
   try {
-    const url = `https://boat-availability.vercel.app/api/check-availability?hub=${encodeURIComponent(hub)}&start_date=${startDateEl.value}&end_date=${endDateEl.value}`;
+    const url = API_BASE + '/check-availability?hub=' + encodeURIComponent(hub) + '&start_date=' + startDateEl.value + '&end_date=' + endDateEl.value;
     const res = await fetch(url);
     const data = await res.json();
-
     availSpinner.style.display = 'none';
-
     const enoughKayaks = data.available_kayaks >= kayaks;
     const enoughCanoes = data.available_canoes >= canoes;
-
     if (enoughKayaks && enoughCanoes) {
       availBar.className = 'availability-bar ok';
-      availText.textContent = `✓ Pieejams! Kajaki: ${data.available_kayaks}, Kanoe: ${data.available_canoes}`;
+      availText.textContent = 'Pieejams! Kajaki: ' + data.available_kayaks + ', Kanoe: ' + data.available_canoes;
       submitBtn.disabled = false;
     } else {
       availBar.className = 'availability-bar error';
-      let msg = '✗ Nav pietiekami brīvu laivu. ';
-      if (!enoughKayaks) msg += `Kajaki: pieejami ${data.available_kayaks}, pieprasīti ${kayaks}. `;
-      if (!enoughCanoes) msg += `Kanoe: pieejami ${data.available_canoes}, pieprasīti ${canoes}.`;
+      let msg = 'Nav pietiekami brivo laivu. ';
+      if (!enoughKayaks) msg += 'Kajaki: pieejami ' + data.available_kayaks + ', pieprasiti ' + kayaks + '. ';
+      if (!enoughCanoes) msg += 'Kanoe: pieejami ' + data.available_canoes + ', pieprasiti ' + canoes + '.';
       availText.textContent = msg;
       submitBtn.disabled = true;
     }
-  } catch (e) {
+  } catch(e) {
     availSpinner.style.display = 'none';
     availBar.className = 'availability-bar error';
-    availText.textContent = 'Neizdevās pārbaudīt pieejamību. Lūdzu, mēģiniet vēlreiz.';
+    availText.textContent = 'Neizdevas parbadit pieejambu. Ludzu, meginet velreiz.';
   }
 }
 
@@ -579,55 +567,43 @@ function resetAvailability() {
   submitBtn.disabled = false;
 }
 
-// Form submit
 document.getElementById('bookingForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   submitBtn.disabled = true;
-  submitBtn.textContent = 'Sūta...';
-
-  const river = riverEl.value;
-  const routeIdx = routeEl.value;
-  const route = ROUTES[river][routeIdx];
-  const firstName = document.getElementById('firstName').value;
-  const lastName = document.getElementById('lastName').value;
-
-  const days = Math.round((new Date(endDateEl.value) - new Date(startDateEl.value)) / 86400000);
-
+  submitBtn.textContent = 'Suta...';
   try {
-    const res = await fetch('https://boat-availability.vercel.app/api/submit-booking', {
+    const res = await fetch(API_BASE + '/submit-booking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        firstName,
-        lastName,
+        firstName: document.getElementById('firstName').value,
+        lastName: document.getElementById('lastName').value,
         email: document.getElementById('email').value,
         phone: document.getElementById('phone').value,
-        river,
-        route: route.name,
+        riverId: riverEl.value,
+        routeId: routeEl.value,
         startDate: startDateEl.value,
         endDate: endDateEl.value,
         kayaks: parseInt(kayaksEl.value) || 0,
         canoes: parseInt(canoesEl.value) || 0,
         startTime: document.getElementById('startTime').value,
-        days,
         notes: document.getElementById('notes').value
       })
     });
-
-    if (res.ok) {
+    const data = await res.json();
+    if (res.ok && data.success) {
       document.getElementById('bookingForm').style.display = 'none';
       document.getElementById('successScreen').style.display = 'block';
       document.getElementById('confirmEmail').textContent = document.getElementById('email').value;
     } else {
-      const err = await res.json();
-      alert('Kļūda: ' + (err.error?.message || 'Nezināma kļūda'));
+      alert('Kludaa: ' + (data.error || 'Nezinama kludaa'));
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Rezervēt';
+      submitBtn.textContent = 'Rezervet';
     }
-  } catch (err) {
-    alert('Savienojuma kļūda. Lūdzu, mēģiniet vēlreiz.');
+  } catch(err) {
+    alert('Savienojuma kludaa. Ludzu, meginet velreiz.');
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Rezervēt';
+    submitBtn.textContent = 'Rezervet';
   }
 });
 </script>
