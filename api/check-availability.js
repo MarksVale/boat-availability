@@ -13,7 +13,6 @@ async function fetchAirtable(tableId, filterFormula) {
 }
 
 export default async function handler(req, res) {
-  // Allow CORS for Fillout
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -26,24 +25,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get Boat Stock for this hub
-    const stockRecords = await fetchAirtable(
-      BOAT_STOCK_TABLE,
-      `SEARCH("${hub}", {Stock ID})`
-    );
+    // Fetch all Boat Stock records, filter by hub using Stock ID field
+    const stockRecords = await fetchAirtable(BOAT_STOCK_TABLE, '1=1');
 
     let totalKayaks = 0;
     let totalCanoes = 0;
 
     for (const r of stockRecords) {
-      const boatType = r.fields['Boat Type'] || '';
+      const stockId = r.fields['Stock ID'] || '';
       const qty = r.fields['Total Quantity'] || 0;
-      if (boatType.includes('Vista')) totalKayaks += qty;
-      if (boatType.includes('Loksija')) totalCanoes += qty;
+      if (!stockId.startsWith(hub)) continue;
+      if (stockId.includes('Vista')) totalKayaks += qty;
+      if (stockId.includes('Loksija')) totalCanoes += qty;
     }
 
     // Get overlapping reservations for this hub
-    // Overlap condition: booking starts before end_date AND booking ends after start_date
     const filter = `AND(
       {Hub} = "${hub}",
       IS_BEFORE({Sākuma datums (from Booking)}, "${end_date}"),
@@ -60,15 +56,12 @@ export default async function handler(req, res) {
       bookedCanoes += r.fields['Canoes Reserved'] || 0;
     }
 
-    const availableKayaks = totalKayaks - bookedKayaks;
-    const availableCanoes = totalCanoes - bookedCanoes;
-
     return res.status(200).json({
       hub,
       start_date,
       end_date,
-      available_kayaks: Math.max(0, availableKayaks),
-      available_canoes: Math.max(0, availableCanoes),
+      available_kayaks: Math.max(0, totalKayaks - bookedKayaks),
+      available_canoes: Math.max(0, totalCanoes - bookedCanoes),
       total_kayaks: totalKayaks,
       total_canoes: totalCanoes,
       booked_kayaks: bookedKayaks,
