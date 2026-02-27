@@ -12,19 +12,19 @@ export default async function handler(req, res) {
   const { firstName, lastName, email, phone, river, route, startDate, endDate, kayaks, canoes, startTime, days, notes } = req.body;
 
   const fields = {
-    'Vārds': firstName,
-    'Uzvārds': lastName,
+    'V\u0101rds': firstName,
+    'Uzv\u0101rds': lastName,
     'E-pasts': email,
     'Numurs': phone,
     'River': river,
     'Route': route,
-    'Kajaks (Vista, 2-vietīga)': parseInt(kayaks) || 0,
-    'Kanoe (Loksija, 3-vietīga)': parseInt(canoes) || 0,
-    'Sākuma datums': startDate,
+    'Kajaks (Vista, 2-viet\u012bga)': parseInt(kayaks) || 0,
+    'Kanoe (Loksija, 3-viet\u012bga)': parseInt(canoes) || 0,
+    'S\u0101kuma datums': startDate,
     'Beigu datums': endDate,
-    'Sākuma laiks': startTime || '',
-    'Cik dienas plānojat airēt?': parseInt(days) || 1,
-    'Piezīmes': notes || '',
+    'S\u0101kuma laiks': startTime || '',
+    'Cik dienas pl\u0101nojat air\u0113t?': parseInt(days) || 1,
+    'Pezi\u012bmes': notes || '',
     'Status': 'Pending'
   };
 
@@ -39,11 +39,12 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
+    console.log('Airtable response:', JSON.stringify(data));
 
     if (response.ok) {
       return res.status(200).json({ success: true, id: data.id });
     } else {
-      return res.status(400).json({ error: data.error?.message || 'Airtable error' });
+      return res.status(400).json({ error: data.error?.message || JSON.stringify(data) });
     }
   } catch (err) {
     return res.status(500).json({ error: err.message });
