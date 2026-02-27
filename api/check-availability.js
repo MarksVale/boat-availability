@@ -1,6 +1,7 @@
 const AIRTABLE_PAT = process.env.AIRTABLE_PAT;
 const BASE_ID = 'appYaHUWSdtuUSeaB';
-const RESERVATIONS_TABLE = 'tblgrNXzhAyDx2JSM'; // Reservations table ID from URL
+const RESERVATIONS_TABLE = 'tblgrNXzhAyDx2JSM';
+const BOAT_STOCK_TABLE = 'tblEBC4kim6uCheAX';
 
 async function fetchAirtable(tableId, filterFormula) {
   const url = `https://api.airtable.com/v0/${BASE_ID}/${tableId}?filterByFormula=${encodeURIComponent(filterFormula)}`;
@@ -27,7 +28,7 @@ export default async function handler(req, res) {
   try {
     // Get Boat Stock for this hub
     const stockRecords = await fetchAirtable(
-      'Boat%20Stock', // table name URL encoded
+      BOAT_STOCK_TABLE,
       `{Hub} = "${hub}"`
     );
 
