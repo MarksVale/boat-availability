@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     'Beigu datums': endDate,
     'S\u0101kuma laiks': startTime || '',
     'Cik dienas pl\u0101nojat air\u0113t?': days,
-    'Piezi\u012bmes': notes || '',
+    'Notes': notes || '',
     'Status': 'Pending'
   };
 
