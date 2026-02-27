@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     // Get Boat Stock for this hub
     const stockRecords = await fetchAirtable(
       BOAT_STOCK_TABLE,
-      `{Hub} = "${hub}"`
+      `SEARCH("${hub}", {Stock ID})`
     );
 
     let totalKayaks = 0;
