@@ -41,7 +41,7 @@ export default async function handler(req, res) {
 
     // Get overlapping reservations for this hub
     const filter = `AND(
-      {Hub} = "${hub}",
+      SEARCH("${hub}", {Hub}),
       IS_BEFORE({Sākuma datums (from Booking)}, "${end_date}"),
       IS_AFTER({Beigu datums (from Booking)}, "${start_date}")
     )`;
