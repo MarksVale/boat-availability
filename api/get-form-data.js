@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
     const rivers = (riversData.records || []).map(r => ({
       id: r.id,
-      name: r.fields['River Name']
+      name: r.fields['River name']
     }));
 
     const routes = (routesData.records || []).map(r => ({
