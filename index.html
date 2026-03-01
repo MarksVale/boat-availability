@@ -661,7 +661,7 @@
               <div class="boat-name">Kajaks Vista</div>
               <div class="boat-price">€30/dienā</div>
             </div>
-            <div class="boat-desc" data-lv="2-vietīga" data-en="2-seater" data-et="2-kohaline" data-fi="2-paikkainen" data-lt="2-vietė">2-vietīga</div>
+            <div class="boat-desc" data-lv="2 vietas" data-en="2 vietas" data-et="2 vietas" data-fi="2 vietas" data-lt="2 vietas">2 vietas</div>
             <input type="number" id="kayaks" min="0" value="0" placeholder="0">
           </div>
 
@@ -670,7 +670,7 @@
               <div class="boat-name">Kanoe Loksija</div>
               <div class="boat-price">€30/dienā</div>
             </div>
-            <div class="boat-desc" data-lv="3-vietīga" data-en="3-seater" data-et="3-kohaline" data-fi="3-paikkainen" data-lt="3-vietė">3-vietīga</div>
+            <div class="boat-desc" data-lv="3 vietas" data-en="3 vietas" data-et="3 vietas" data-fi="3 vietas" data-lt="3 vietas">3 vietas</div>
             <input type="number" id="canoes" min="0" value="0" placeholder="0">
           </div>
 
@@ -679,7 +679,7 @@
               <div class="boat-name">Plosts</div>
               <div class="boat-price">€X/dienā</div>
             </div>
-            <div class="boat-desc" data-lv="10-vietīgs" data-en="10-seater" data-et="10-kohaline" data-fi="10-paikkainen" data-lt="10-vietė">10-vietīgs</div>
+            <div class="boat-desc" data-lv="6 vietas" data-en="6 vietas" data-et="6 vietas" data-fi="6 vietas" data-lt="6 vietas">6 vietas</div>
             <input type="number" id="rafts" min="0" value="0" placeholder="0">
           </div>
 
@@ -800,7 +800,7 @@ function updateBoatCards(riverId) {
 
     // Update capacity description
     const descEl = el.querySelector('.boat-desc');
-    if (descEl && bt.capacity) descEl.textContent = bt.capacity + '-vietīgs';
+    if (descEl && bt.capacity) descEl.textContent = bt.capacity + ' vietas';
 
     el.style.display = 'block';
   });
