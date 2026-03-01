@@ -525,6 +525,20 @@
     transition: background 0.2s;
   }
   .return-btn:hover { background: var(--moss); }
+
+  #pageLoader { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:80px 0; gap:16px; color:#888; font-size:0.9rem; }
+  #pageLoader .big-spinner { width:40px; height:40px; border:3px solid #e0e0e0; border-top-color:var(--forest); border-radius:50%; animation:spin 0.8s linear infinite; }
+
+  .booking-summary { background:var(--sand); border-radius:12px; padding:20px 24px; margin:20px 0; text-align:left; width:100%; }
+  .booking-summary-title { font-size:0.78rem; font-weight:700; color:var(--forest); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px; }
+  .booking-summary-row { display:flex; justify-content:space-between; font-size:0.87rem; padding:6px 0; border-bottom:1px solid rgba(0,0,0,0.07); color:#555; }
+  .booking-summary-row:last-child { border-bottom:none; }
+  .booking-summary-row span:last-child { font-weight:600; color:var(--dark); }
+  .booking-summary-total { display:flex; justify-content:space-between; font-size:1rem; font-weight:700; padding-top:12px; margin-top:4px; color:var(--forest); border-top:2px solid rgba(15,92,0,0.15); }
+
+  .field-error { border-color: var(--error) !important; }
+  .field-error-msg { font-size:0.78rem; color:var(--error); margin-top:2px; display:none; }
+  .field-error-msg.show { display:block; }
 </style>
 </head>
 <body>
@@ -551,7 +565,12 @@
   <h2 class="form-title" data-lv="Laivu rezervācijas forma" data-en="Boat Reservation Form" data-et="Paatide reserveerimise vorm" data-fi="Veneiden varauslomake" data-lt="Valčių rezervacijos forma">Laivu rezervācijas forma</h2>
   <p class="form-subtitle" data-lv="Aizpildiet formu, lai rezervētu laivas jūsu piedzīvojumam uz upes." data-en="Fill in the form to reserve boats for your river adventure." data-et="Täitke vorm, et broneerida paadid oma jõeseikluseks." data-fi="Täytä lomake varataksesi veneet jokiseikkailuasi varten." data-lt="Užpildykite formą, kad rezervuotumėte valtis savo upės nuotoliui.">Aizpildiet formu, lai rezervētu laivas jūsu piedzīvojumam uz upes.</p>
 
-  <form id="bookingForm">
+  <div id="pageLoader">
+    <div class="big-spinner"></div>
+    <span id="loaderText">Ielādē...</span>
+  </div>
+
+  <form id="bookingForm" style="display:none">
 
     <!-- Contact -->
     <div class="section">
@@ -728,6 +747,14 @@
     <h2 data-lv="Paldies par rezervāciju!" data-en="Thank you for your reservation!" data-et="Täname broneeringu eest!" data-fi="Kiitos varauksestasi!" data-lt="Ačiū už rezervaciją!">Paldies par rezervāciju!</h2>
     <p><span data-lv="Mēs saņēmām jūsu pieteikumu un sazināsimies ar jums tuvākajā laikā, lai apstiprinātu rezervāciju." data-en="We have received your request and will be in touch shortly to confirm your reservation." data-et="Oleme teie taotluse kätte saanud ja võtame teiega peagi ühendust, et broneeringu kinnitada." data-fi="Olemme vastaanottaneet hakemuksesi ja otamme sinuun pian yhteyttä vahvistaaksemme varauksen." data-lt="Gavome jūsų užklausą ir netrukus susisieksime, kad patvirtintume rezervaciją.">Mēs saņēmām jūsu pieteikumu un sazināsimies ar jums tuvākajā laikā, lai apstiprinātu rezervāciju.</span><br><br>
     <span data-lv="Pārbaudiet savu e-pastu" data-en="Check your email" data-et="Kontrollige oma e-posti" data-fi="Tarkista sähköpostisi" data-lt="Patikrinkite savo el. paštą">Pārbaudiet savu e-pastu</span> <strong id="confirmEmail"></strong></p>
+    <div class="booking-summary" id="bookingSummary">
+      <div class="booking-summary-title" data-lv="Jūsu rezervācija" data-en="Your Booking" data-et="Teie broneering" data-fi="Varauksesi" data-lt="Jūsų rezervacija">Jūsu rezervācija</div>
+      <div id="summaryRows"></div>
+      <div class="booking-summary-total">
+        <span data-lv="Kopā" data-en="Total" data-et="Kokku" data-fi="Yhteensä" data-lt="Iš viso">Kopā</span>
+        <span id="summaryTotal"></span>
+      </div>
+    </div>
     <a href="http://www.laivunoma.com/" class="return-btn" data-lv="Atgriezties uz vietni" data-en="Return to website" data-et="Tagasi veebisaidile" data-fi="Palaa verkkosivustolle" data-lt="Grįžti į svetainę">Atgriezties uz vietni</a>
   </div>
 </div>
@@ -738,6 +765,14 @@ const API_BASE = 'https://boat-availability.vercel.app/api';
 let allRivers = [];
 let allRoutes = [];
 let boatTypeMap = {};
+
+// Phone digit requirements per country code
+const phoneMinDigits = {
+  '+371':8, '+370':8, '+372':7, '+358':9, '+46':7, '+47':8, '+45':8,
+  '+49':10, '+44':10, '+31':9, '+48':9, '+7':10, '+375':9, '+33':9,
+  '+39':9, '+34':9, '+43':10, '+41':9, '+32':9, '+420':9, '+421':9,
+  '+36':9, '+40':9, '+380':9, '+1':10, '+61':9, '+81':10, '+86':11, '+91':10
+};
 
 async function loadFormData() {
   try {
@@ -752,8 +787,13 @@ async function loadFormData() {
     allRivers.forEach(r => {
       riverEl.innerHTML += '<option value="' + r.id + '">' + r.name + '</option>';
     });
+
+    // Hide loader, show form
+    document.getElementById('pageLoader').style.display = 'none';
+    document.getElementById('bookingForm').style.display = 'block';
   } catch(e) {
     console.error('Failed to load form data', e);
+    document.getElementById('pageLoader').innerHTML = '<span style="color:var(--error)">Neizdevās ielādēt formu. Lūdzu, atjauniniet lapu.</span>';
   }
 }
 
@@ -912,12 +952,16 @@ function calPick(which, year, month, day) {
   hidden.value = toISO(date);
   hidden.dispatchEvent(new Event('change'));
 
-  // If picking start and it's after end, clear end
-  if (which === 'start' && calState.end.value && date > calState.end.value) {
-    calState.end.value = null;
-    document.getElementById('endDateDisplay').textContent = document.getElementById('endDateDisplay').getAttribute('data-' + (window.currentLang||'lv'));
-    document.getElementById('endDateBtn').classList.remove('has-value');
-    document.getElementById('endDate').value = '';
+  // If picking start, sync end calendar to same month and clear end if it's before start
+  if (which === 'start') {
+    calState.end.year = calState.start.year;
+    calState.end.month = calState.start.month;
+    if (calState.end.value && date > calState.end.value) {
+      calState.end.value = null;
+      document.getElementById('endDateDisplay').textContent = document.getElementById('endDateDisplay').getAttribute('data-' + (window.currentLang||'lv'));
+      document.getElementById('endDateBtn').classList.remove('has-value');
+      document.getElementById('endDate').value = '';
+    }
   }
 
   closeCals();
@@ -963,6 +1007,15 @@ riverEl.addEventListener('change', () => {
 
 routeEl.addEventListener('change', () => { checkAvailability(); });
 document.getElementById('startDate').addEventListener('change', () => { updateSummary(); checkAvailability(); });
+
+// Clear errors on input
+['firstName','lastName','email','phone'].forEach(id => {
+  document.getElementById(id).addEventListener('input', function() {
+    this.classList.remove('field-error');
+    const err = this.parentElement.querySelector('.field-error-msg');
+    if (err) err.classList.remove('show');
+  });
+});
 document.getElementById('endDate').addEventListener('change', () => { updateSummary(); checkAvailability(); });
 document.getElementById('kayaks').addEventListener('input', () => { updateSummary(); checkAvailability(); });
 document.getElementById('canoes').addEventListener('input', () => { updateSummary(); checkAvailability(); });
@@ -1024,9 +1077,16 @@ async function _checkAvailability() {
     const res = await fetch(url);
     const data = await res.json();
     availSpinner.style.display = 'none';
-    const enoughKayaks = (data.available_kayaks ?? 999) >= kayaks;
-    const enoughCanoes = (data.available_canoes ?? 999) >= canoes;
-    const enoughRafts  = (data.available_rafts  ?? 999) >= rafts;
+    // Set max on inputs = available stock (so browser prevents typing more)
+    const maxK = (data.available_kayaks ?? 200);
+    const maxC = (data.available_canoes ?? 200);
+    const maxR = (data.available_rafts  ?? 200);
+    document.getElementById('kayaks').max = maxK;
+    document.getElementById('canoes').max = maxC;
+    document.getElementById('rafts').max  = maxR;
+    const enoughKayaks = maxK >= kayaks;
+    const enoughCanoes = maxC >= canoes;
+    const enoughRafts  = maxR >= rafts;
     if (enoughKayaks && enoughCanoes && enoughRafts) {
       availBar.className = 'availability-bar ok';
       availText.textContent = window.currentLang === 'en' ? 'Available!' : 'Pieejams!';
@@ -1048,8 +1108,153 @@ function resetAvailability() {
   submitBtn.disabled = false;
 }
 
+function scrollToEl(el) {
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showFieldError(el, msg) {
+  el.classList.add('field-error');
+  let errEl = el.parentElement.querySelector('.field-error-msg');
+  if (!errEl) {
+    errEl = document.createElement('div');
+    errEl.className = 'field-error-msg';
+    el.parentElement.appendChild(errEl);
+  }
+  errEl.textContent = msg;
+  errEl.classList.add('show');
+}
+
+function clearFieldErrors() {
+  document.querySelectorAll('.field-error').forEach(el => el.classList.remove('field-error'));
+  document.querySelectorAll('.field-error-msg').forEach(el => el.classList.remove('show'));
+}
+
+function validateForm() {
+  clearFieldErrors();
+  const lang = window.currentLang || 'lv';
+  const msgs = {
+    required: { lv:'Šis lauks ir obligāts', en:'This field is required', lt:'Šis laukas privalomas', et:'See väli on kohustuslik', fi:'Tämä kenttä on pakollinen' },
+    phone: { lv:'Lūdzu, ievadiet derīgu tālruņa numuru', en:'Please enter a valid phone number', lt:'Įveskite galiojantį telefono numerį', et:'Sisestage kehtiv telefoninumber', fi:'Syötä kelvollinen puhelinnumero' },
+    boats: { lv:'Lūdzu, izvēlieties vismaz vienu laivu', en:'Please select at least one boat', lt:'Pasirinkite bent vieną valtį', et:'Valige vähemalt üks paat', fi:'Valitse vähintään yksi vene' },
+    dates: { lv:'Lūdzu, izvēlieties datumus', en:'Please select dates', lt:'Pasirinkite datas', et:'Valige kuupäevad', fi:'Valitse päivämäärät' },
+  };
+  let firstError = null;
+
+  const req = ['firstName','lastName','email'];
+  req.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el.value.trim()) {
+      showFieldError(el, msgs.required[lang]);
+      if (!firstError) firstError = el;
+    }
+  });
+
+  // Phone validation
+  const phoneEl = document.getElementById('phone');
+  const prefix = document.getElementById('prefixCode').textContent.trim();
+  const digits = phoneEl.value.replace(/\D/g,'');
+  const minDigits = phoneMinDigits[prefix] || 7;
+  if (!digits || digits.length < minDigits) {
+    showFieldError(phoneEl, msgs.phone[lang] + ' (' + minDigits + ' ' + (lang === 'lv' ? 'cipari' : 'digits') + ')');
+    if (!firstError) firstError = phoneEl;
+  }
+
+  // River & route
+  if (!riverEl.value) {
+    showFieldError(riverEl, msgs.required[lang]);
+    if (!firstError) firstError = riverEl;
+  }
+  if (!routeEl.value) {
+    showFieldError(routeEl, msgs.required[lang]);
+    if (!firstError) firstError = routeEl;
+  }
+
+  // Dates
+  const startDate = document.getElementById('startDate').value;
+  const endDate = document.getElementById('endDate').value;
+  if (!startDate || !endDate) {
+    const dateWrap = document.getElementById('startDateBtn');
+    if (!firstError) firstError = dateWrap;
+    // show a simple message near date section
+    let errEl = document.getElementById('dateError');
+    if (!errEl) {
+      errEl = document.createElement('div');
+      errEl.id = 'dateError';
+      errEl.className = 'field-error-msg';
+      document.getElementById('startDateWrap').parentElement.parentElement.appendChild(errEl);
+    }
+    errEl.textContent = msgs.dates[lang];
+    errEl.classList.add('show');
+  }
+
+  // Boats
+  const kayaks = parseInt(document.getElementById('kayaks').value) || 0;
+  const canoes = parseInt(document.getElementById('canoes').value) || 0;
+  const rafts  = parseInt(document.getElementById('rafts').value)  || 0;
+  if (kayaks + canoes + rafts === 0) {
+    const boatSection = document.getElementById('boatSection');
+    let errEl = boatSection.querySelector('.field-error-msg');
+    if (!errEl) {
+      errEl = document.createElement('div');
+      errEl.className = 'field-error-msg';
+      boatSection.appendChild(errEl);
+    }
+    errEl.textContent = msgs.boats[lang];
+    errEl.classList.add('show');
+    if (!firstError) firstError = boatSection;
+  }
+
+  if (firstError) {
+    scrollToEl(firstError);
+    return false;
+  }
+  return true;
+}
+
+function showBookingSummary() {
+  const lang = window.currentLang || 'lv';
+  const labels = {
+    river:  { lv:'Upe', en:'River', lt:'Upė', et:'Jõgi', fi:'Joki' },
+    route:  { lv:'Maršruts', en:'Route', lt:'Maršrutas', et:'Marsruut', fi:'Reitti' },
+    dates:  { lv:'Datumi', en:'Dates', lt:'Datos', et:'Kuupäevad', fi:'Päivämäärät' },
+    days:   { lv:'Dienas', en:'Days', lt:'Dienos', et:'Päevad', fi:'Päivät' },
+  };
+
+  const riverName = riverEl.options[riverEl.selectedIndex]?.text || '';
+  const routeName = routeEl.options[routeEl.selectedIndex]?.text || '';
+  const startDate = document.getElementById('startDate').value;
+  const endDate   = document.getElementById('endDate').value;
+  const days = getDays();
+  const kayaks = parseInt(document.getElementById('kayaks').value) || 0;
+  const canoes = parseInt(document.getElementById('canoes').value) || 0;
+  const rafts  = parseInt(document.getElementById('rafts').value)  || 0;
+
+  const kayakPrice = (boatTypeMap['kajaks vista'] || {}).price || 30;
+  const canoePrice = (boatTypeMap['kanoe loksija'] || {}).price || 30;
+  const raftPrice  = (boatTypeMap['rafts'] || {}).price || 30;
+  const kayakName  = (boatTypeMap['kajaks vista'] || {}).name || 'Kajaks Vista';
+  const canoeName  = (boatTypeMap['kanoe loksija'] || {}).name || 'Kanoe Loksija';
+  const raftName   = (boatTypeMap['rafts'] || {}).name || 'Plosts';
+
+  const total = (kayaks * kayakPrice + canoes * canoePrice + rafts * raftPrice) * days;
+
+  let rows = '';
+  rows += `<div class="booking-summary-row"><span>${labels.river[lang]}</span><span>${riverName}</span></div>`;
+  rows += `<div class="booking-summary-row"><span>${labels.route[lang]}</span><span>${routeName}</span></div>`;
+  rows += `<div class="booking-summary-row"><span>${labels.dates[lang]}</span><span>${startDate} → ${endDate}</span></div>`;
+  rows += `<div class="booking-summary-row"><span>${labels.days[lang]}</span><span>${days}</span></div>`;
+  if (kayaks > 0) rows += `<div class="booking-summary-row"><span>${kayakName}</span><span>${kayaks} × €${kayakPrice}/d × ${days}d = €${kayaks * kayakPrice * days}</span></div>`;
+  if (canoes > 0) rows += `<div class="booking-summary-row"><span>${canoeName}</span><span>${canoes} × €${canoePrice}/d × ${days}d = €${canoes * canoePrice * days}</span></div>`;
+  if (rafts  > 0) rows += `<div class="booking-summary-row"><span>${raftName}</span><span>${rafts} × €${raftPrice}/d × ${days}d = €${rafts * raftPrice * days}</span></div>`;
+
+  document.getElementById('summaryRows').innerHTML = rows;
+  document.getElementById('summaryTotal').textContent = '€' + total;
+}
+
 document.getElementById('bookingForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (!validateForm()) return;
+
   submitBtn.disabled = true;
   submitBtn.textContent = window.currentLang === 'en' ? 'Sending...' : 'Sūta...';
   try {
@@ -1074,16 +1279,24 @@ document.getElementById('bookingForm').addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     if (res.ok && data.success) {
+      showBookingSummary();
       document.getElementById('bookingForm').style.display = 'none';
-      document.getElementById('successScreen').style.display = 'block';
+      const successEl = document.getElementById('successScreen');
+      successEl.style.display = 'block';
       document.getElementById('confirmEmail').textContent = document.getElementById('email').value;
+      // Re-translate summary titles
+      document.querySelectorAll('#successScreen [data-lv]').forEach(el => {
+        const text = el.getAttribute('data-' + (window.currentLang||'lv')) || el.getAttribute('data-en');
+        if (text) el.textContent = text;
+      });
+      successEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else {
-      alert('Kludaa: ' + (data.error || 'Nezinama kludaa'));
+      alert('Kļūda: ' + (data.error || 'Nezināma kļūda'));
       submitBtn.disabled = false;
       submitBtn.textContent = window.currentLang === 'en' ? 'Book Now' : 'Rezervēt';
     }
   } catch(err) {
-    alert('Savienojuma kludaa. Ludzu, meginet velreiz.');
+    alert('Savienojuma kļūda. Lūdzu, mēģiniet vēlreiz.');
     submitBtn.disabled = false;
     submitBtn.textContent = window.currentLang === 'en' ? 'Book Now' : 'Rezervēt';
   }
