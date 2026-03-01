@@ -23,7 +23,8 @@ export default async function handler(req, res) {
 
     const rivers = (riversData.records || []).map(r => ({
       id: r.id,
-      name: r.fields['River name']
+      name: r.fields['River name'],
+      boatTypes: (r.fields['Boat Types'] || []).map(t => t.toLowerCase()) // ['kayaks','canoes','rafts'] → lowercase
     }));
 
     const routes = (routesData.records || []).map(r => ({
