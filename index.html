@@ -412,6 +412,119 @@
   .prefix-option:hover { background: #f5f5f5; }
   .prefix-option .code { color: #888; font-size: 0.8rem; margin-left: auto; }
   .phone-field-wrap { position: relative; }
+  /* Custom datepicker */
+  .datepicker-wrap { position: relative; }
+  .datepicker-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 10px;
+    background: white;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.95rem;
+    color: var(--dark);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .datepicker-btn:hover { border-color: #ccc; }
+  .datepicker-btn.has-value { border-color: var(--moss); }
+  .datepicker-btn.has-value:focus, .datepicker-btn:focus {
+    border-color: var(--moss);
+    box-shadow: 0 0 0 3px rgba(79,127,47,0.1);
+    outline: none;
+  }
+  .datepicker-btn span { flex: 1; }
+  .datepicker-btn .placeholder { color: #aaa; }
+
+  .cal-popup {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    background: white;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    z-index: 1000;
+    padding: 16px;
+    width: 280px;
+    font-family: 'Montserrat', sans-serif;
+  }
+  .cal-popup.open { display: block; }
+
+  .cal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .cal-nav {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    color: var(--forest);
+    font-size: 1rem;
+    transition: background 0.15s;
+    display: flex; align-items: center;
+  }
+  .cal-nav:hover { background: var(--sand); }
+  .cal-month-label {
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: var(--forest);
+    cursor: pointer;
+  }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  }
+  .cal-dow {
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #999;
+    padding: 4px 0 8px;
+    text-transform: uppercase;
+  }
+  .cal-day {
+    text-align: center;
+    padding: 7px 2px;
+    font-size: 0.82rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    font-weight: 500;
+  }
+  .cal-day:hover:not(.disabled):not(.empty) { background: var(--sand); }
+  .cal-day.today { color: var(--forest); font-weight: 700; }
+  .cal-day.selected { background: var(--forest); color: white; font-weight: 700; border-radius: 8px; }
+  .cal-day.disabled { color: #ddd; cursor: default; }
+  .cal-day.empty { cursor: default; }
+  .cal-day.in-range { background: #e8f5e0; border-radius: 0; }
+  .cal-day.range-start { background: var(--forest); color: white; border-radius: 8px 0 0 8px; }
+  .cal-day.range-end { background: var(--forest); color: white; border-radius: 0 8px 8px 0; }
+  .cal-day.range-start.range-end { border-radius: 8px; }
+  .return-btn {
+    display: inline-block;
+    margin-top: 28px;
+    padding: 13px 32px;
+    background: var(--forest);
+    color: white;
+    border-radius: 12px;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+  .return-btn:hover { background: var(--moss); }
 </style>
 </head>
 <body>
@@ -456,7 +569,7 @@
       <div class="row">
         <div class="field">
           <label data-lv="E-pasts" data-en="Email" data-et="E-post" data-fi="Sähköposti" data-lt="El. paštas">E-pasts <span class="req">*</span></label>
-          <input type="email" id="email" placeholder="janis@gmail.com" required>
+          <input type="email" id="email" placeholder="janis@inbox.lv" required>
         </div>
         <div class="field">
           <label data-lv="Tālrunis" data-en="Phone" data-et="Telefon" data-fi="Puhelin" data-lt="Telefonas">Tālrunis <span class="req">*</span></label>
@@ -515,11 +628,25 @@
         <small style="color:#888;font-size:0.78rem;margin-bottom:6px;display:block;" data-lv="Vienas dienas braucienam izvēlieties sākuma un beigu datumu vienādu." data-en="For a one-day trip, select the same date for both start and end." data-et="Ühepäevase sõidu puhul valige sama kuupäev algus- ja lõppkuupäevaks." data-fi="Yhden päivän retkelle valitse sama päivämäärä alku- ja loppupäiväksi." data-lt="Vienos dienos kelionei pasirinkite tą pačią pradžios ir pabaigos datą.">Vienas dienas braucienam izvēlieties sākuma un beigu datumu vienādu.</small>
         <div class="date-row">
           <div class="field">
-            <input type="date" id="startDate" required>
+            <div class="datepicker-wrap" id="startDateWrap">
+              <button type="button" class="datepicker-btn" id="startDateBtn" onclick="toggleCal('start')">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="13" rx="2" stroke="#0f5c00" stroke-width="1.5"/><path d="M1 6h14" stroke="#0f5c00" stroke-width="1.5"/><path d="M5 1v2M11 1v2" stroke="#0f5c00" stroke-width="1.5" stroke-linecap="round"/></svg>
+                <span id="startDateDisplay" data-lv="Izvēlieties datumu" data-en="Select date" data-et="Valige kuupäev" data-fi="Valitse päivä" data-lt="Pasirinkite datą">Izvēlieties datumu</span>
+              </button>
+              <div class="cal-popup" id="startCal"></div>
+            </div>
+            <input type="hidden" id="startDate" required>
             <small style="color:#888;font-size:0.78rem;margin-top:4px" data-lv="Sākuma datums" data-en="Start Date" data-et="Alguskuupäev" data-fi="Alkupäivä" data-lt="Pradžios data">Sākuma datums</small>
           </div>
           <div class="field">
-            <input type="date" id="endDate" required>
+            <div class="datepicker-wrap" id="endDateWrap">
+              <button type="button" class="datepicker-btn" id="endDateBtn" onclick="toggleCal('end')">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="14" height="13" rx="2" stroke="#0f5c00" stroke-width="1.5"/><path d="M1 6h14" stroke="#0f5c00" stroke-width="1.5"/><path d="M5 1v2M11 1v2" stroke="#0f5c00" stroke-width="1.5" stroke-linecap="round"/></svg>
+                <span id="endDateDisplay" data-lv="Izvēlieties datumu" data-en="Select date" data-et="Valige kuupäev" data-fi="Valitse päivä" data-lt="Pasirinkite datą">Izvēlieties datumu</span>
+              </button>
+              <div class="cal-popup" id="endCal"></div>
+            </div>
+            <input type="hidden" id="endDate" required>
             <small style="color:#888;font-size:0.78rem;margin-top:4px" data-lv="Beigu datums" data-en="End Date" data-et="Lõppkuupäev" data-fi="Loppupäivä" data-lt="Pabaigos data">Beigu datums</small>
           </div>
         </div>
@@ -562,7 +689,7 @@
           <div class="summary-value" id="totalDays">—</div>
         </div>
         <div class="summary-item">
-          <div class="summary-label" data-lv="Aptuvenā cena" data-en="Estimated Price" data-et="Ligikaudne hind" data-fi="Arvioitu hinta" data-lt="Apytikslė kaina">Aptuvenā cena</div>
+          <div class="summary-label" data-lv="Cena" data-en="Price" data-et="Hind" data-fi="Hinta" data-lt="Kaina">Cena</div>
           <div class="summary-value" id="totalPrice">€0</div>
         </div>
       </div>
@@ -589,6 +716,7 @@
     <h2 data-lv="Paldies par rezervāciju!" data-en="Thank you for your reservation!" data-et="Täname broneeringu eest!" data-fi="Kiitos varauksestasi!" data-lt="Ačiū už rezervaciją!">Paldies par rezervāciju!</h2>
     <p><span data-lv="Mēs saņēmām jūsu pieteikumu un sazināsimies ar jums tuvākajā laikā, lai apstiprinātu rezervāciju." data-en="We have received your request and will be in touch shortly to confirm your reservation." data-et="Oleme teie taotluse kätte saanud ja võtame teiega peagi ühendust, et broneeringu kinnitada." data-fi="Olemme vastaanottaneet hakemuksesi ja otamme sinuun pian yhteyttä vahvistaaksemme varauksen." data-lt="Gavome jūsų užklausą ir netrukus susisieksime, kad patvirtintume rezervaciją.">Mēs saņēmām jūsu pieteikumu un sazināsimies ar jums tuvākajā laikā, lai apstiprinātu rezervāciju.</span><br><br>
     <span data-lv="Pārbaudiet savu e-pastu" data-en="Check your email" data-et="Kontrollige oma e-posti" data-fi="Tarkista sähköpostisi" data-lt="Patikrinkite savo el. paštą">Pārbaudiet savu e-pastu</span> <strong id="confirmEmail"></strong></p>
+    <a href="http://www.laivunoma.com/" class="return-btn" data-lv="Atgriezties uz vietni" data-en="Return to website" data-et="Tagasi veebisaidile" data-fi="Palaa verkkosivustolle" data-lt="Grįžti į svetainę">Atgriezties uz vietni</a>
   </div>
 </div>
 
@@ -619,8 +747,6 @@ loadFormData();
 
 const riverEl = document.getElementById('river');
 const routeEl = document.getElementById('route');
-const startDateEl = document.getElementById('startDate');
-const endDateEl = document.getElementById('endDate');
 const kayaksEl = document.getElementById('kayaks');
 const canoesEl = document.getElementById('canoes');
 const totalSeatsEl = document.getElementById('totalSeats');
@@ -631,9 +757,129 @@ const availText = document.getElementById('availText');
 const availSpinner = document.getElementById('availSpinner');
 const submitBtn = document.getElementById('submitBtn');
 
-const today = new Date().toISOString().split('T')[0];
-startDateEl.min = today;
-endDateEl.min = today;
+const today = new Date();
+today.setHours(0,0,0,0);
+
+// ── Custom Calendar ──────────────────────────────────────────
+const calState = {
+  start: { year: today.getFullYear(), month: today.getMonth(), value: null },
+  end:   { year: today.getFullYear(), month: today.getMonth(), value: null },
+  open: null
+};
+
+const DOW = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function fmt(d) {
+  if (!d) return '';
+  return d.getDate() + '.' + (d.getMonth()+1) + '.' + d.getFullYear();
+}
+function toISO(d) {
+  if (!d) return '';
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function renderCal(which) {
+  const s = calState[which];
+  const popup = document.getElementById(which + 'Cal');
+  const firstDay = new Date(s.year, s.month, 1).getDay();
+  const daysInMonth = new Date(s.year, s.month+1, 0).getDate();
+  const startVal = calState.start.value;
+  const endVal = calState.end.value;
+
+  let html = `<div class="cal-header">
+    <button type="button" class="cal-nav" onclick="calNav('${which}',-1)">&#8249;</button>
+    <span class="cal-month-label">${MONTHS[s.month]} ${s.year}</span>
+    <button type="button" class="cal-nav" onclick="calNav('${which}',1)">&#8250;</button>
+  </div><div class="cal-grid">`;
+
+  DOW.forEach(d => { html += `<div class="cal-dow">${d}</div>`; });
+
+  for (let i = 0; i < firstDay; i++) html += `<div class="cal-day empty"></div>`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(s.year, s.month, d);
+    date.setHours(0,0,0,0);
+    const isPast = date < today;
+    const isToday = date.getTime() === today.getTime();
+    const isStart = startVal && date.getTime() === startVal.getTime();
+    const isEnd = endVal && date.getTime() === endVal.getTime();
+    const inRange = startVal && endVal && date > startVal && date < endVal;
+
+    let cls = 'cal-day';
+    if (isPast) cls += ' disabled';
+    if (isToday) cls += ' today';
+    if (isStart && isEnd) cls += ' selected range-start range-end';
+    else if (isStart) cls += ' range-start';
+    else if (isEnd) cls += ' range-end';
+    else if (inRange) cls += ' in-range';
+
+    const onclick = isPast ? '' : `onclick="calPick('${which}',${s.year},${s.month},${d})"`;
+    html += `<div class="${cls}" ${onclick}>${d}</div>`;
+  }
+
+  html += '</div>';
+  popup.innerHTML = html;
+}
+
+function calNav(which, dir) {
+  const s = calState[which];
+  s.month += dir;
+  if (s.month > 11) { s.month = 0; s.year++; }
+  if (s.month < 0)  { s.month = 11; s.year--; }
+  renderCal(which);
+}
+
+function calPick(which, year, month, day) {
+  const date = new Date(year, month, day);
+  calState[which].value = date;
+
+  // Update display button
+  const btn = document.getElementById(which + 'DateBtn');
+  const span = document.getElementById(which + 'DateDisplay');
+  span.textContent = fmt(date);
+  span.classList.remove('placeholder');
+  btn.classList.add('has-value');
+
+  // Update hidden input & trigger events
+  const hidden = document.getElementById(which + 'Date');
+  hidden.value = toISO(date);
+  hidden.dispatchEvent(new Event('change'));
+
+  // If picking start and it's after end, clear end
+  if (which === 'start' && calState.end.value && date > calState.end.value) {
+    calState.end.value = null;
+    document.getElementById('endDateDisplay').textContent = document.getElementById('endDateDisplay').getAttribute('data-' + (window.currentLang||'lv'));
+    document.getElementById('endDateBtn').classList.remove('has-value');
+    document.getElementById('endDate').value = '';
+  }
+
+  closeCals();
+  // Re-render both to show range highlight
+  renderCal('start');
+  renderCal('end');
+}
+
+function toggleCal(which) {
+  const popup = document.getElementById(which + 'Cal');
+  const isOpen = popup.classList.contains('open');
+  closeCals();
+  if (!isOpen) {
+    renderCal(which);
+    popup.classList.add('open');
+    calState.open = which;
+  }
+}
+
+function closeCals() {
+  document.getElementById('startCal').classList.remove('open');
+  document.getElementById('endCal').classList.remove('open');
+  calState.open = null;
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.datepicker-wrap')) closeCals();
+});
 
 riverEl.addEventListener('change', () => {
   const riverId = riverEl.value;
@@ -649,15 +895,17 @@ riverEl.addEventListener('change', () => {
 });
 
 routeEl.addEventListener('change', () => { checkAvailability(); });
-startDateEl.addEventListener('change', () => { updateSummary(); checkAvailability(); });
-endDateEl.addEventListener('change', () => { updateSummary(); checkAvailability(); });
+document.getElementById('startDate').addEventListener('change', () => { updateSummary(); checkAvailability(); });
+document.getElementById('endDate').addEventListener('change', () => { updateSummary(); checkAvailability(); });
 kayaksEl.addEventListener('input', () => { updateSummary(); checkAvailability(); });
 canoesEl.addEventListener('input', () => { updateSummary(); checkAvailability(); });
 
 function getDays() {
-  if (!startDateEl.value || !endDateEl.value) return 0;
-  const start = new Date(startDateEl.value);
-  const end = new Date(endDateEl.value);
+  const sv = document.getElementById('startDate').value;
+  const ev = document.getElementById('endDate').value;
+  if (!sv || !ev) return 0;
+  const start = new Date(sv);
+  const end = new Date(ev);
   return Math.round((end - start) / 86400000) + 1;
 }
 
@@ -685,13 +933,15 @@ async function _checkAvailability() {
   const hub = getSelectedHub();
   const kayaks = parseInt(kayaksEl.value) || 0;
   const canoes = parseInt(canoesEl.value) || 0;
-  if (!hub || !startDateEl.value || !endDateEl.value || (kayaks + canoes) === 0) { resetAvailability(); return; }
+  const startVal = document.getElementById('startDate').value;
+  const endVal = document.getElementById('endDate').value;
+  if (!hub || !startVal || !endVal || (kayaks + canoes) === 0) { resetAvailability(); return; }
   
   availBar.className = 'availability-bar checking';
   availSpinner.style.display = 'block';
   availText.textContent = window.currentLang === 'en' ? 'Checking availability...' : 'Parbaudam pieejambu...';
   try {
-    const url = API_BASE + '/check-availability?hub=' + encodeURIComponent(hub) + '&start_date=' + startDateEl.value + '&end_date=' + endDateEl.value;
+    const url = API_BASE + '/check-availability?hub=' + encodeURIComponent(hub) + '&start_date=' + startVal + '&end_date=' + endVal;
     const res = await fetch(url);
     const data = await res.json();
     availSpinner.style.display = 'none';
@@ -699,14 +949,11 @@ async function _checkAvailability() {
     const enoughCanoes = data.available_canoes >= canoes;
     if (enoughKayaks && enoughCanoes) {
       availBar.className = 'availability-bar ok';
-      availText.textContent = window.currentLang === 'en' ? 'Available! Kayaks: ' + data.available_kayaks + ', Canoes: ' + data.available_canoes : 'Pieejams! Kajaki: ' + data.available_kayaks + ', Kanoe: ' + data.available_canoes;
+      availText.textContent = window.currentLang === 'en' ? 'Available!' : 'Pieejams!';
       submitBtn.disabled = false;
     } else {
       availBar.className = 'availability-bar error';
-      let msg = window.currentLang === 'en' ? 'Not enough boats available. ' : 'Nav pietiekami brivo laivu. ';
-      if (!enoughKayaks) msg += 'Kajaki: pieejami ' + data.available_kayaks + ', pieprasiti ' + kayaks + '. ';
-      if (!enoughCanoes) msg += 'Kanoe: pieejami ' + data.available_canoes + ', pieprasiti ' + canoes + '.';
-      availText.textContent = msg;
+      availText.textContent = window.currentLang === 'en' ? 'Not enough boats available.' : 'Nav pietiekami brīvo laivu.';
       submitBtn.disabled = true;
     }
   } catch(e) {
@@ -736,8 +983,8 @@ document.getElementById('bookingForm').addEventListener('submit', async (e) => {
         phone: document.getElementById('prefixCode').textContent + ' ' + document.getElementById('phone').value,
         riverId: riverEl.value,
         routeId: routeEl.value,
-        startDate: startDateEl.value,
-        endDate: endDateEl.value,
+        startDate: document.getElementById('startDate').value,
+        endDate: document.getElementById('endDate').value,
         kayaks: parseInt(kayaksEl.value) || 0,
         canoes: parseInt(canoesEl.value) || 0,
         startTime: document.getElementById('startTime').value,
@@ -770,11 +1017,11 @@ const langFlags = {
 };
 
 const langMeta = {
-  lv: { name: 'LV', river: '— Izvēlieties upi —', route: '— Vispirms izvēlieties upi —', notes: 'Jebkāda papildu informācija...', firstName: 'Jānis', lastName: 'Bērziņš' },
-  en: { name: 'EN', river: '— Select a river —', route: '— First select a river —', notes: 'Any additional information...', firstName: 'John', lastName: 'Smith' },
-  lt: { name: 'LT', river: '— Pasirinkite upę —', route: '— Pirmiausia pasirinkite upę —', notes: 'Bet kokia papildoma informacija...', firstName: 'Jonas', lastName: 'Jonaitis' },
-  et: { name: 'ET', river: '— Valige jõgi —', route: '— Kõigepealt valige jõgi —', notes: 'Mis tahes lisateave...', firstName: 'Jaan', lastName: 'Tamm' },
-  fi: { name: 'FI', river: '— Valitse joki —', route: '— Valitse ensin joki —', notes: 'Lisätietoja...', firstName: 'Matti', lastName: 'Virtanen' },
+  lv: { name: 'LV', river: '— Izvēlieties upi —', route: '— Vispirms izvēlieties upi —', notes: 'Jebkāda papildu informācija...', firstName: 'Jānis', lastName: 'Bērziņš', email: 'janis@inbox.lv', phoneCode: '+371', phoneCountry: 'LV' },
+  en: { name: 'EN', river: '— Select a river —', route: '— First select a river —', notes: 'Any additional information...', firstName: 'John', lastName: 'Smith', email: 'john@gmail.com', phoneCode: '+44', phoneCountry: 'GB' },
+  lt: { name: 'LT', river: '— Pasirinkite upę —', route: '— Pirmiausia pasirinkite upę —', notes: 'Bet kokia papildoma informacija...', firstName: 'Jonas', lastName: 'Jonaitis', email: 'jonas@gmail.com', phoneCode: '+370', phoneCountry: 'LT' },
+  et: { name: 'ET', river: '— Valige jõgi —', route: '— Kõigepealt valige jõgi —', notes: 'Mis tahes lisateave...', firstName: 'Jaan', lastName: 'Tamm', email: 'jaan@gmail.com', phoneCode: '+372', phoneCountry: 'EE' },
+  fi: { name: 'FI', river: '— Valitse joki —', route: '— Valitse ensin joki —', notes: 'Lisätietoja...', firstName: 'Matti', lastName: 'Virtanen', email: 'matti@gmail.com', phoneCode: '+358', phoneCountry: 'FI' },
 };
 
 function setLang(lang) {
@@ -792,6 +1039,8 @@ function setLang(lang) {
   document.getElementById('notes').placeholder = m.notes;
   document.getElementById('firstName').placeholder = m.firstName;
   document.getElementById('lastName').placeholder = m.lastName;
+  document.getElementById('email').placeholder = m.email;
+  selectCountry(m.phoneCode, m.phoneCountry);
 
   const riverEl = document.getElementById('river');
   const routeEl = document.getElementById('route');
