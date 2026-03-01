@@ -1012,7 +1012,8 @@ document.getElementById('startDate').addEventListener('change', () => { updateSu
 ['firstName','lastName','email','phone'].forEach(id => {
   document.getElementById(id).addEventListener('input', function() {
     this.classList.remove('field-error');
-    const err = this.parentElement.querySelector('.field-error-msg');
+    const container = this.closest('.field') || this.parentElement;
+    const err = container.querySelector('.field-error-msg');
     if (err) err.classList.remove('show');
   });
 });
@@ -1114,11 +1115,13 @@ function scrollToEl(el) {
 
 function showFieldError(el, msg) {
   el.classList.add('field-error');
-  let errEl = el.parentElement.querySelector('.field-error-msg');
+  // For phone, attach to .phone-field-wrap; otherwise to .field container
+  const container = el.closest('.field') || el.parentElement;
+  let errEl = container.querySelector('.field-error-msg');
   if (!errEl) {
     errEl = document.createElement('div');
     errEl.className = 'field-error-msg';
-    el.parentElement.appendChild(errEl);
+    container.appendChild(errEl);
   }
   errEl.textContent = msg;
   errEl.classList.add('show');
