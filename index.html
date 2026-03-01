@@ -759,7 +759,7 @@ function updateBoatCards(riverId) {
   const river = allRivers.find(r => r.id === riverId);
   // boatTypes is an array like ['kayak','canoe'] or ['raft'] from Airtable
   // fallback to kayak+canoe if field not yet in API
-  const types = (river && river.boatTypes) ? river.boatTypes : ['kayak', 'canoe'];
+  const types = (river && river.boatTypes) ? river.boatTypes : ['kayaks', 'canoes'];
 
   const show = (id, visible) => {
     const el = document.getElementById(id);
@@ -770,9 +770,9 @@ function updateBoatCards(riverId) {
     }
   };
 
-  show('card-kayak', types.includes('kayak'));
-  show('card-canoe', types.includes('canoe'));
-  show('card-raft',  types.includes('raft'));
+  show('card-kayak', types.includes('kayaks'));
+  show('card-canoe', types.includes('canoes'));
+  show('card-raft',  types.includes('rafts'));
 
   document.getElementById('boatSection').style.display = riverId ? 'block' : 'none';
 }
