@@ -652,10 +652,11 @@
         </div>
       </div>
 
-      <div class="field">
+      <div class="field" id="boatSection" style="display:none">
         <label data-lv="Laivas" data-en="Boats" data-et="Paadid" data-fi="Veneet" data-lt="Valtys">Laivas <span class="req">*</span></label>
         <div class="boat-row">
-          <div class="boat-card">
+
+          <div class="boat-card" id="card-kayak" style="display:none">
             <div class="boat-card-header">
               <div class="boat-name">Kajaks Vista</div>
               <div class="boat-price">€30/dienā</div>
@@ -663,7 +664,8 @@
             <div class="boat-desc" data-lv="2-vietīga" data-en="2-seater" data-et="2-kohaline" data-fi="2-paikkainen" data-lt="2-vietė">2-vietīga</div>
             <input type="number" id="kayaks" min="0" value="0" placeholder="0">
           </div>
-          <div class="boat-card">
+
+          <div class="boat-card" id="card-canoe" style="display:none">
             <div class="boat-card-header">
               <div class="boat-name">Kanoe Loksija</div>
               <div class="boat-price">€30/dienā</div>
@@ -671,6 +673,16 @@
             <div class="boat-desc" data-lv="3-vietīga" data-en="3-seater" data-et="3-kohaline" data-fi="3-paikkainen" data-lt="3-vietė">3-vietīga</div>
             <input type="number" id="canoes" min="0" value="0" placeholder="0">
           </div>
+
+          <div class="boat-card" id="card-raft" style="display:none">
+            <div class="boat-card-header">
+              <div class="boat-name">Plosts</div>
+              <div class="boat-price">€X/dienā</div>
+            </div>
+            <div class="boat-desc" data-lv="10-vietīgs" data-en="10-seater" data-et="10-kohaline" data-fi="10-paikkainen" data-lt="10-vietė">10-vietīgs</div>
+            <input type="number" id="rafts" min="0" value="0" placeholder="0">
+          </div>
+
         </div>
       </div>
 
@@ -743,12 +755,32 @@ async function loadFormData() {
   }
 }
 
+function updateBoatCards(riverId) {
+  const river = allRivers.find(r => r.id === riverId);
+  // boatTypes is an array like ['kayak','canoe'] or ['raft'] from Airtable
+  // fallback to kayak+canoe if field not yet in API
+  const types = (river && river.boatTypes) ? river.boatTypes : ['kayak', 'canoe'];
+
+  const show = (id, visible) => {
+    const el = document.getElementById(id);
+    el.style.display = visible ? 'block' : 'none';
+    if (!visible) {
+      const input = el.querySelector('input[type=number]');
+      if (input) input.value = 0;
+    }
+  };
+
+  show('card-kayak', types.includes('kayak'));
+  show('card-canoe', types.includes('canoe'));
+  show('card-raft',  types.includes('raft'));
+
+  document.getElementById('boatSection').style.display = riverId ? 'block' : 'none';
+}
+
 loadFormData();
 
 const riverEl = document.getElementById('river');
 const routeEl = document.getElementById('route');
-const kayaksEl = document.getElementById('kayaks');
-const canoesEl = document.getElementById('canoes');
 const totalSeatsEl = document.getElementById('totalSeats');
 const totalDaysEl = document.getElementById('totalDays');
 const totalPriceEl = document.getElementById('totalPrice');
@@ -891,14 +923,16 @@ riverEl.addEventListener('change', () => {
       routeEl.innerHTML += '<option value="' + r.id + '" data-hub="' + r.hubName + '">' + r.name + '</option>';
     });
   }
+  updateBoatCards(riverId);
   resetAvailability();
 });
 
 routeEl.addEventListener('change', () => { checkAvailability(); });
 document.getElementById('startDate').addEventListener('change', () => { updateSummary(); checkAvailability(); });
 document.getElementById('endDate').addEventListener('change', () => { updateSummary(); checkAvailability(); });
-kayaksEl.addEventListener('input', () => { updateSummary(); checkAvailability(); });
-canoesEl.addEventListener('input', () => { updateSummary(); checkAvailability(); });
+document.getElementById('kayaks').addEventListener('input', () => { updateSummary(); checkAvailability(); });
+document.getElementById('canoes').addEventListener('input', () => { updateSummary(); checkAvailability(); });
+document.getElementById('rafts').addEventListener('input',  () => { updateSummary(); checkAvailability(); });
 
 function getDays() {
   const sv = document.getElementById('startDate').value;
@@ -915,12 +949,14 @@ function getSelectedHub() {
 }
 
 function updateSummary() {
-  const kayaks = parseInt(kayaksEl.value) || 0;
-  const canoes = parseInt(canoesEl.value) || 0;
-  totalSeatsEl.textContent = kayaks * 2 + canoes * 3;
+  const kayaks = parseInt(document.getElementById('kayaks').value) || 0;
+  const canoes = parseInt(document.getElementById('canoes').value) || 0;
+  const rafts  = parseInt(document.getElementById('rafts').value)  || 0;
   const days = getDays();
+  totalSeatsEl.textContent = kayaks * 2 + canoes * 3 + rafts * 10;
   totalDaysEl.textContent = days > 0 ? days : '--';
-  totalPriceEl.textContent = (kayaks + canoes) * 30 * (days > 0 ? days : 0) + ' EUR';
+  totalPriceEl.textContent = (kayaks * 30 + canoes * 30 + rafts * 0) * (days > 0 ? days : 0) + ' EUR';
+  // Note: raft price is placeholder (0) until you set it in Airtable
 }
 
 let availTimer = null;
@@ -931,23 +967,25 @@ function checkAvailability() {
 
 async function _checkAvailability() {
   const hub = getSelectedHub();
-  const kayaks = parseInt(kayaksEl.value) || 0;
-  const canoes = parseInt(canoesEl.value) || 0;
+  const kayaks = parseInt(document.getElementById('kayaks').value) || 0;
+  const canoes = parseInt(document.getElementById('canoes').value) || 0;
+  const rafts  = parseInt(document.getElementById('rafts').value)  || 0;
   const startVal = document.getElementById('startDate').value;
   const endVal = document.getElementById('endDate').value;
-  if (!hub || !startVal || !endVal || (kayaks + canoes) === 0) { resetAvailability(); return; }
-  
+  if (!hub || !startVal || !endVal || (kayaks + canoes + rafts) === 0) { resetAvailability(); return; }
+
   availBar.className = 'availability-bar checking';
   availSpinner.style.display = 'block';
-  availText.textContent = window.currentLang === 'en' ? 'Checking availability...' : 'Parbaudam pieejambu...';
+  availText.textContent = window.currentLang === 'en' ? 'Checking availability...' : 'Pārbaudam pieejamību...';
   try {
     const url = API_BASE + '/check-availability?hub=' + encodeURIComponent(hub) + '&start_date=' + startVal + '&end_date=' + endVal;
     const res = await fetch(url);
     const data = await res.json();
     availSpinner.style.display = 'none';
-    const enoughKayaks = data.available_kayaks >= kayaks;
-    const enoughCanoes = data.available_canoes >= canoes;
-    if (enoughKayaks && enoughCanoes) {
+    const enoughKayaks = (data.available_kayaks ?? 999) >= kayaks;
+    const enoughCanoes = (data.available_canoes ?? 999) >= canoes;
+    const enoughRafts  = (data.available_rafts  ?? 999) >= rafts;
+    if (enoughKayaks && enoughCanoes && enoughRafts) {
       availBar.className = 'availability-bar ok';
       availText.textContent = window.currentLang === 'en' ? 'Available!' : 'Pieejams!';
       submitBtn.disabled = false;
@@ -959,7 +997,7 @@ async function _checkAvailability() {
   } catch(e) {
     availSpinner.style.display = 'none';
     availBar.className = 'availability-bar error';
-    availText.textContent = window.currentLang === 'en' ? 'Could not check availability. Please try again.' : 'Neizdevas parbadit pieejambu. Ludzu, meginet velreiz.';
+    availText.textContent = window.currentLang === 'en' ? 'Could not check availability. Please try again.' : 'Neizdevās pārbaudīt pieejamību. Lūdzu, mēģiniet vēlreiz.';
   }
 }
 
@@ -985,8 +1023,9 @@ document.getElementById('bookingForm').addEventListener('submit', async (e) => {
         routeId: routeEl.value,
         startDate: document.getElementById('startDate').value,
         endDate: document.getElementById('endDate').value,
-        kayaks: parseInt(kayaksEl.value) || 0,
-        canoes: parseInt(canoesEl.value) || 0,
+        kayaks: parseInt(document.getElementById('kayaks').value) || 0,
+        canoes: parseInt(document.getElementById('canoes').value) || 0,
+        rafts:  parseInt(document.getElementById('rafts').value)  || 0,
         startTime: document.getElementById('startTime').value,
         notes: document.getElementById('notes').value
       })
