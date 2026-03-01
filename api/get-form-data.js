@@ -2,6 +2,7 @@ const AIRTABLE_PAT = process.env.AIRTABLE_PAT;
 const BASE_ID = 'appYaHUWSdtuUSeaB';
 const RIVERS_TABLE = 'tbljVF5T997io0iuJ';
 const ROUTES_TABLE = 'tbl8OxvtV7vlgTCXe';
+const BOAT_TYPES_TABLE = 'tbl5c4tD2a6kStsMQ';
 
 async function fetchAirtable(tableId, filter) {
   const url = `https://api.airtable.com/v0/${BASE_ID}/${tableId}` + (filter ? `?filterByFormula=${encodeURIComponent(filter)}` : '');
@@ -16,15 +17,27 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const [riversData, routesData] = await Promise.all([
+    const [riversData, routesData, boatTypesData] = await Promise.all([
       fetchAirtable(RIVERS_TABLE, '{Active} = 1'),
-      fetchAirtable(ROUTES_TABLE, '{Active} = 1')
+      fetchAirtable(ROUTES_TABLE, '{Active} = 1'),
+      fetchAirtable(BOAT_TYPES_TABLE, '{Active} = 1')
     ]);
+
+    // Build map: lowercase name → { name, price, capacity }
+    const boatTypeMap = {};
+    (boatTypesData.records || []).forEach(r => {
+      const key = (r.fields['Boat type name'] || '').toLowerCase();
+      boatTypeMap[key] = {
+        name: r.fields['Boat type name'],
+        price: r.fields['Price per day'] || 0,
+        capacity: r.fields['Capacity'] || 1
+      };
+    });
 
     const rivers = (riversData.records || []).map(r => ({
       id: r.id,
       name: r.fields['River name'],
-      boatTypes: (r.fields['Boat Types'] || []).map(t => t.toLowerCase()) // ['kayaks','canoes','rafts'] → lowercase
+      boatTypes: (r.fields['Boat Types'] || []).map(t => t.toLowerCase())
     }));
 
     const routes = (routesData.records || []).map(r => ({
@@ -34,7 +47,7 @@ export default async function handler(req, res) {
       hubName: r.fields['Starting Hub Lookup']?.[0] || ''
     }));
 
-    return res.status(200).json({ rivers, routes });
+    return res.status(200).json({ rivers, routes, boatTypeMap });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
