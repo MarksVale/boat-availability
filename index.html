@@ -737,6 +737,7 @@ const API_BASE = 'https://boat-availability.vercel.app/api';
 
 let allRivers = [];
 let allRoutes = [];
+let boatTypeMap = {};
 
 async function loadFormData() {
   try {
@@ -744,6 +745,7 @@ async function loadFormData() {
     const data = await res.json();
     allRivers = data.rivers || [];
     allRoutes = data.routes || [];
+    boatTypeMap = data.boatTypeMap || {};
 
     const riverEl = document.getElementById('river');
     riverEl.innerHTML = '<option value="">-- Izveleties upi --</option>';
@@ -757,22 +759,51 @@ async function loadFormData() {
 
 function updateBoatCards(riverId) {
   const river = allRivers.find(r => r.id === riverId);
-  // boatTypes is an array like ['kayak','canoe'] or ['raft'] from Airtable
-  // fallback to kayak+canoe if field not yet in API
-  const types = (river && river.boatTypes) ? river.boatTypes : ['kayaks', 'canoes'];
+  const types = (river && river.boatTypes && river.boatTypes.length > 0) ? river.boatTypes : ['kayaks', 'canoes'];
 
-  const show = (id, visible) => {
-    const el = document.getElementById(id);
-    el.style.display = visible ? 'block' : 'none';
-    if (!visible) {
-      const input = el.querySelector('input[type=number]');
-      if (input) input.value = 0;
-    }
+  // Map each card id to its Airtable key
+  const cardMap = {
+    'card-kayak': 'kajaks vista',
+    'card-canoe': 'kanoe loksija',
+    'card-raft':  'rafts'
+  };
+  // Which types show which card
+  const typeToCard = {
+    'kayaks': 'card-kayak',
+    'canoes': 'card-canoe',
+    'rafts':  'card-raft'
   };
 
-  show('card-kayak', types.includes('kayaks'));
-  show('card-canoe', types.includes('canoes'));
-  show('card-raft',  types.includes('rafts'));
+  // Hide all first, reset values
+  Object.keys(cardMap).forEach(cardId => {
+    const el = document.getElementById(cardId);
+    el.style.display = 'none';
+    const input = el.querySelector('input[type=number]');
+    if (input) input.value = 0;
+  });
+
+  // Show and populate relevant cards
+  types.forEach(type => {
+    const cardId = typeToCard[type];
+    if (!cardId) return;
+    const el = document.getElementById(cardId);
+    const btKey = cardMap[cardId];
+    const bt = boatTypeMap[btKey] || {};
+
+    // Update name
+    const nameEl = el.querySelector('.boat-name');
+    if (nameEl && bt.name) nameEl.textContent = bt.name;
+
+    // Update price
+    const priceEl = el.querySelector('.boat-price');
+    if (priceEl && bt.price) priceEl.textContent = '€' + bt.price + '/dienā';
+
+    // Update capacity description
+    const descEl = el.querySelector('.boat-desc');
+    if (descEl && bt.capacity) descEl.textContent = bt.capacity + '-vietīgs';
+
+    el.style.display = 'block';
+  });
 
   document.getElementById('boatSection').style.display = riverId ? 'block' : 'none';
 }
@@ -953,10 +984,18 @@ function updateSummary() {
   const canoes = parseInt(document.getElementById('canoes').value) || 0;
   const rafts  = parseInt(document.getElementById('rafts').value)  || 0;
   const days = getDays();
-  totalSeatsEl.textContent = kayaks * 2 + canoes * 3 + rafts * 10;
+
+  const kayakPrice = (boatTypeMap['kajaks vista'] || {}).price || 30;
+  const canoePrice = (boatTypeMap['kanoe loksija'] || {}).price || 30;
+  const raftPrice  = (boatTypeMap['rafts'] || {}).price || 30;
+  const kayakCap   = (boatTypeMap['kajaks vista'] || {}).capacity || 2;
+  const canoeCap   = (boatTypeMap['kanoe loksija'] || {}).capacity || 3;
+  const raftCap    = (boatTypeMap['rafts'] || {}).capacity || 6;
+
+  totalSeatsEl.textContent = kayaks * kayakCap + canoes * canoeCap + rafts * raftCap;
   totalDaysEl.textContent = days > 0 ? days : '--';
-  totalPriceEl.textContent = (kayaks * 30 + canoes * 30 + rafts * 0) * (days > 0 ? days : 0) + ' EUR';
-  // Note: raft price is placeholder (0) until you set it in Airtable
+  const total = (kayaks * kayakPrice + canoes * canoePrice + rafts * raftPrice) * (days > 0 ? days : 0);
+  totalPriceEl.textContent = '€' + total;
 }
 
 let availTimer = null;
