@@ -308,6 +308,86 @@
     background: rgba(255,255,255,0.2);
   }
   header { position: relative; }
+
+  .phone-wrapper {
+    display: flex;
+    gap: 0;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .phone-wrapper:focus-within {
+    border-color: #094200;
+    box-shadow: 0 0 0 3px rgba(15,92,0,0.1);
+  }
+  .phone-prefix-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+    background: #f9f9f9;
+    border: none;
+    border-right: 1.5px solid #e0e0e0;
+    cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .phone-prefix-btn:hover { background: #f0f0f0; }
+  .phone-prefix-btn svg { flex-shrink: 0; }
+  .phone-wrapper input {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    flex: 1;
+    min-width: 0;
+  }
+  .phone-wrapper input:focus { box-shadow: none !important; }
+  .prefix-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    background: white;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    z-index: 999;
+    width: 280px;
+    max-height: 300px;
+    overflow-y: auto;
+    display: none;
+  }
+  .prefix-dropdown.open { display: block; }
+  .prefix-search {
+    padding: 10px 12px;
+    border-bottom: 1px solid #eee;
+    position: sticky;
+    top: 0;
+    background: white;
+  }
+  .prefix-search input {
+    width: 100%;
+    border: 1px solid #ddd !important;
+    border-radius: 6px !important;
+    padding: 6px 10px !important;
+    font-size: 0.85rem !important;
+  }
+  .prefix-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    transition: background 0.1s;
+  }
+  .prefix-option:hover { background: #f5f5f5; }
+  .prefix-option .code { color: #888; font-size: 0.8rem; margin-left: auto; }
+  .phone-field-wrap { position: relative; }
 </style>
 </head>
 <body>
@@ -350,7 +430,20 @@
         </div>
         <div class="field">
           <label data-lv="Tālrunis" data-en="Phone">Tālrunis <span class="req">*</span></label>
-          <input type="tel" id="phone" placeholder="+371 20000000" required>
+          <div class="phone-field-wrap">
+            <div class="phone-wrapper">
+              <button type="button" class="phone-prefix-btn" id="prefixBtn" onclick="togglePrefixDropdown()">
+                <span id="prefixFlag"></span>
+                <span id="prefixCode">+371</span>
+                <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="#666" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </button>
+              <input type="tel" id="phone" placeholder="20000000" required>
+            </div>
+            <div class="prefix-dropdown" id="prefixDropdown">
+              <div class="prefix-search"><input type="text" id="prefixSearch" placeholder="Search country..." oninput="filterCountries(this.value)"></div>
+              <div id="prefixList"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -610,7 +703,7 @@ document.getElementById('bookingForm').addEventListener('submit', async (e) => {
         firstName: document.getElementById('firstName').value,
         lastName: document.getElementById('lastName').value,
         email: document.getElementById('email').value,
-        phone: document.getElementById('phone').value,
+        phone: document.getElementById('prefixCode').textContent + ' ' + document.getElementById('phone').value,
         riverId: riverEl.value,
         routeId: routeEl.value,
         startDate: startDateEl.value,
@@ -677,6 +770,89 @@ function setLang(lang) {
 }
 
 window.currentLang = 'lv';
+
+
+const countries = [
+  {name:'Latvia',code:'LV',prefix:'+371',flag:'🇱🇻'},
+  {name:'Lithuania',code:'LT',prefix:'+370',flag:'🇱🇹'},
+  {name:'Estonia',code:'EE',prefix:'+372',flag:'🇪🇪'},
+  {name:'Finland',code:'FI',prefix:'+358',flag:'🇫🇮'},
+  {name:'Sweden',code:'SE',prefix:'+46',flag:'🇸🇪'},
+  {name:'Norway',code:'NO',prefix:'+47',flag:'🇳🇴'},
+  {name:'Denmark',code:'DK',prefix:'+45',flag:'🇩🇰'},
+  {name:'Germany',code:'DE',prefix:'+49',flag:'🇩🇪'},
+  {name:'United Kingdom',code:'GB',prefix:'+44',flag:'🇬🇧'},
+  {name:'Netherlands',code:'NL',prefix:'+31',flag:'🇳🇱'},
+  {name:'Poland',code:'PL',prefix:'+48',flag:'🇵🇱'},
+  {name:'Russia',code:'RU',prefix:'+7',flag:'🇷🇺'},
+  {name:'Belarus',code:'BY',prefix:'+375',flag:'🇧🇾'},
+  {name:'France',code:'FR',prefix:'+33',flag:'🇫🇷'},
+  {name:'Italy',code:'IT',prefix:'+39',flag:'🇮🇹'},
+  {name:'Spain',code:'ES',prefix:'+34',flag:'🇪🇸'},
+  {name:'Austria',code:'AT',prefix:'+43',flag:'🇦🇹'},
+  {name:'Switzerland',code:'CH',prefix:'+41',flag:'🇨🇭'},
+  {name:'Belgium',code:'BE',prefix:'+32',flag:'🇧🇪'},
+  {name:'Czech Republic',code:'CZ',prefix:'+420',flag:'🇨🇿'},
+  {name:'Slovakia',code:'SK',prefix:'+421',flag:'🇸🇰'},
+  {name:'Hungary',code:'HU',prefix:'+36',flag:'🇭🇺'},
+  {name:'Romania',code:'RO',prefix:'+40',flag:'🇷🇴'},
+  {name:'Ukraine',code:'UA',prefix:'+380',flag:'🇺🇦'},
+  {name:'United States',code:'US',prefix:'+1',flag:'🇺🇸'},
+  {name:'Canada',code:'CA',prefix:'+1',flag:'🇨🇦'},
+  {name:'Australia',code:'AU',prefix:'+61',flag:'🇦🇺'},
+  {name:'Japan',code:'JP',prefix:'+81',flag:'🇯🇵'},
+  {name:'China',code:'CN',prefix:'+86',flag:'🇨🇳'},
+  {name:'India',code:'IN',prefix:'+91',flag:'🇮🇳'},
+];
+
+function flagSvg(code) {
+  const base = 0x1F1E6;
+  const chars = [...code.toUpperCase()].map(c => String.fromCodePoint(base + c.charCodeAt(0) - 65));
+  return chars.join('');
+}
+
+function renderCountries(list) {
+  const el = document.getElementById('prefixList');
+  el.innerHTML = list.map(c => 
+    `<div class="prefix-option" onclick="selectCountry('${c.prefix}','${c.code}')">
+      <span style="font-size:1.2rem">${c.flag}</span>
+      <span>${c.name}</span>
+      <span class="code">${c.prefix}</span>
+    </div>`
+  ).join('');
+}
+
+function selectCountry(prefix, code) {
+  document.getElementById('prefixCode').textContent = prefix;
+  document.getElementById('prefixFlag').textContent = countries.find(c=>c.code===code)?.flag || '';
+  document.getElementById('prefixDropdown').classList.remove('open');
+}
+
+function togglePrefixDropdown() {
+  const dd = document.getElementById('prefixDropdown');
+  dd.classList.toggle('open');
+  if (dd.classList.contains('open')) {
+    document.getElementById('prefixSearch').focus();
+  }
+}
+
+function filterCountries(q) {
+  const filtered = countries.filter(c => 
+    c.name.toLowerCase().includes(q.toLowerCase()) || c.prefix.includes(q)
+  );
+  renderCountries(filtered);
+}
+
+// Close on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.phone-field-wrap')) {
+    document.getElementById('prefixDropdown').classList.remove('open');
+  }
+});
+
+// Init
+renderCountries(countries);
+selectCountry('+371', 'LV');
 
 </script>
 </body>
