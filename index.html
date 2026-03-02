@@ -209,6 +209,12 @@
     color: var(--error);
   }
 
+  .availability-bar.season-error {
+    display: flex;
+    background: #fff3e0;
+    color: #e65100;
+  }
+
   .spinner {
     width: 14px; height: 14px;
     border: 2px solid currentColor;
@@ -314,7 +320,6 @@
     display: none;
     min-width: 160px;
     z-index: 999;
-    /* ensure it never goes off screen to the right */
     right: auto;
     left: 50%;
     transform: translateX(-50%);
@@ -412,7 +417,6 @@
   .prefix-option:hover { background: #f5f5f5; }
   .prefix-option .code { color: #888; font-size: 0.8rem; margin-left: auto; }
   .phone-field-wrap { position: relative; }
-  /* Custom datepicker */
   .datepicker-wrap { position: relative; }
   .datepicker-btn {
     width: 100%;
@@ -478,7 +482,6 @@
     font-weight: 700;
     font-size: 0.92rem;
     color: var(--forest);
-    cursor: pointer;
   }
   .cal-grid {
     display: grid;
@@ -501,16 +504,21 @@
     cursor: pointer;
     transition: background 0.12s, color 0.12s;
     font-weight: 500;
+    position: relative;
   }
-  .cal-day:hover:not(.disabled):not(.empty) { background: var(--sand); }
+  .cal-day:hover:not(.disabled):not(.empty):not(.blocked) { background: var(--sand); }
   .cal-day.today { color: var(--forest); font-weight: 700; }
   .cal-day.selected { background: var(--forest); color: white; font-weight: 700; border-radius: 8px; }
   .cal-day.disabled { color: #ddd; cursor: default; }
+  .cal-day.blocked { color: #ddd; cursor: not-allowed; background: #fafafa; text-decoration: line-through; }
   .cal-day.empty { cursor: default; }
   .cal-day.in-range { background: #e8f5e0; border-radius: 0; }
   .cal-day.range-start { background: var(--forest); color: white; border-radius: 8px 0 0 8px; }
   .cal-day.range-end { background: var(--forest); color: white; border-radius: 0 8px 8px 0; }
   .cal-day.range-start.range-end { border-radius: 8px; }
+  .cal-legend { display: flex; gap: 12px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; }
+  .cal-legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: #888; }
+  .cal-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
   .return-btn {
     display: inline-block;
     margin-top: 28px;
@@ -765,6 +773,7 @@ const API_BASE = 'https://boat-availability.vercel.app/api';
 let allRivers = [];
 let allRoutes = [];
 let boatTypeMap = {};
+let bookingWindows = []; // NEW: booking windows from Airtable
 
 // Phone digit requirements per country code
 const phoneMinDigits = {
@@ -774,6 +783,55 @@ const phoneMinDigits = {
   '+36':9, '+40':9, '+380':9, '+1':10, '+61':9, '+81':10, '+86':11, '+91':10
 };
 
+// ── Booking Window Logic ─────────────────────────────────────
+// Returns true if a date is allowed for the currently selected river
+function isDateAllowed(date, riverId) {
+  if (!riverId) return true; // no river selected yet, allow all
+  const riverWindows = bookingWindows.filter(w => w.riverId === riverId);
+  if (riverWindows.length === 0) return true; // no windows defined = all dates open
+
+  const d = new Date(date);
+  d.setHours(0,0,0,0);
+
+  // Check if date falls within any Open window
+  const openWindows = riverWindows.filter(w => w.type === 'Open');
+  const closedWindows = riverWindows.filter(w => w.type === 'Closed');
+
+  // If there are Open windows defined, date must be in at least one
+  if (openWindows.length > 0) {
+    const inOpenWindow = openWindows.some(w => {
+      if (!w.seasonOpen || !w.seasonClose) return false;
+      const open = new Date(w.seasonOpen); open.setHours(0,0,0,0);
+      const close = new Date(w.seasonClose); close.setHours(0,0,0,0);
+      return d >= open && d <= close;
+    });
+    if (!inOpenWindow) return false;
+  }
+
+  // Even if in Open window, check if it's in a Closed window
+  const inClosedWindow = closedWindows.some(w => {
+    if (!w.seasonOpen || !w.seasonClose) return false;
+    const open = new Date(w.seasonOpen); open.setHours(0,0,0,0);
+    const close = new Date(w.seasonClose); close.setHours(0,0,0,0);
+    return d >= open && d <= close;
+  });
+  if (inClosedWindow) return false;
+
+  return true;
+}
+
+function getSeasonMessage(riverId) {
+  const lang = window.currentLang || 'lv';
+  const msgs = {
+    lv: 'Šie datumi nav pieejami',
+    en: 'These dates are not available',
+    lt: 'Šios datos nepasiekiamos',
+    et: 'Need kuupäevad pole saadaval',
+    fi: 'Nämä päivämäärät eivät ole saatavilla'
+  };
+  return msgs[lang] || msgs.en;
+}
+
 async function loadFormData() {
   try {
     const res = await fetch(API_BASE + '/get-form-data');
@@ -781,6 +839,7 @@ async function loadFormData() {
     allRivers = data.rivers || [];
     allRoutes = data.routes || [];
     boatTypeMap = data.boatTypeMap || {};
+    bookingWindows = data.bookingWindows || []; // NEW
 
     const riverEl = document.getElementById('river');
     riverEl.innerHTML = '<option value="">-- Izveleties upi --</option>';
@@ -788,7 +847,6 @@ async function loadFormData() {
       riverEl.innerHTML += '<option value="' + r.id + '">' + r.name + '</option>';
     });
 
-    // Hide loader, show form
     document.getElementById('pageLoader').style.display = 'none';
     document.getElementById('bookingForm').style.display = 'block';
   } catch(e) {
@@ -801,20 +859,17 @@ function updateBoatCards(riverId) {
   const river = allRivers.find(r => r.id === riverId);
   const types = (river && river.boatTypes && river.boatTypes.length > 0) ? river.boatTypes : ['kayaks', 'canoes'];
 
-  // Map each card id to its Airtable key
   const cardMap = {
     'card-kayak': 'kajaks vista',
     'card-canoe': 'kanoe loksija',
     'card-raft':  'rafts'
   };
-  // Which types show which card
   const typeToCard = {
     'kayaks': 'card-kayak',
     'canoes': 'card-canoe',
     'rafts':  'card-raft'
   };
 
-  // Hide all first, reset values
   Object.keys(cardMap).forEach(cardId => {
     const el = document.getElementById(cardId);
     el.style.display = 'none';
@@ -822,7 +877,6 @@ function updateBoatCards(riverId) {
     if (input) input.value = 0;
   });
 
-  // Show and populate relevant cards
   types.forEach(type => {
     const cardId = typeToCard[type];
     if (!cardId) return;
@@ -830,15 +884,12 @@ function updateBoatCards(riverId) {
     const btKey = cardMap[cardId];
     const bt = boatTypeMap[btKey] || {};
 
-    // Update name
     const nameEl = el.querySelector('.boat-name');
     if (nameEl && bt.name) nameEl.textContent = bt.name;
 
-    // Update price
     const priceEl = el.querySelector('.boat-price');
     if (priceEl && bt.price) priceEl.textContent = '€' + bt.price + '/dienā';
 
-    // Update capacity description
     const descEl = el.querySelector('.boat-desc');
     if (descEl && bt.capacity) {
       const word = { lv: 'vietas', en: 'seats', et: 'kohta', fi: 'paikkaa', lt: 'vietos' };
@@ -892,6 +943,7 @@ function renderCal(which) {
   const daysInMonth = new Date(s.year, s.month+1, 0).getDate();
   const startVal = calState.start.value;
   const endVal = calState.end.value;
+  const currentRiverId = riverEl.value;
 
   let html = `<div class="cal-header">
     <button type="button" class="cal-nav" onclick="calNav('${which}',-1)">&#8249;</button>
@@ -911,20 +963,37 @@ function renderCal(which) {
     const isStart = startVal && date.getTime() === startVal.getTime();
     const isEnd = endVal && date.getTime() === endVal.getTime();
     const inRange = startVal && endVal && date > startVal && date < endVal;
+    // NEW: check booking window
+    const isBlocked = !isPast && !isDateAllowed(date, currentRiverId);
 
     let cls = 'cal-day';
     if (isPast) cls += ' disabled';
-    if (isToday) cls += ' today';
-    if (isStart && isEnd) cls += ' selected range-start range-end';
+    else if (isBlocked) cls += ' blocked';
+    else if (isStart && isEnd) cls += ' selected range-start range-end';
     else if (isStart) cls += ' range-start';
     else if (isEnd) cls += ' range-end';
     else if (inRange) cls += ' in-range';
+    if (isToday && !isPast && !isBlocked) cls += ' today';
 
-    const onclick = isPast ? '' : `onclick="calPick('${which}',${s.year},${s.month},${d})"`;
-    html += `<div class="${cls}" ${onclick}>${d}</div>`;
+    const onclick = (isPast || isBlocked) ? '' : `onclick="calPick('${which}',${s.year},${s.month},${d})"`;
+    const title = isBlocked ? `title="${getSeasonMessage(currentRiverId)}"` : '';
+    html += `<div class="${cls}" ${onclick} ${title}>${d}</div>`;
   }
 
   html += '</div>';
+
+  // Add legend if there are booking windows for this river
+  const riverWindows = bookingWindows.filter(w => w.riverId === currentRiverId);
+  if (riverWindows.length > 0) {
+    const lang = window.currentLang || 'lv';
+    const availLabel = { lv:'Pieejams', en:'Available', lt:'Pasiekiama', et:'Saadaval', fi:'Saatavilla' };
+    const blockedLabel = { lv:'Šie datumi nav pieejami', en:'These dates are not available', lt:'Šios datos nepasiekiamos', et:'Need kuupäevad pole saadaval', fi:'Nämä päivämäärät eivät ole saatavilla' };
+    html += `<div class="cal-legend">
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--forest)"></div> ${availLabel[lang]||availLabel.en}</div>
+      <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#ddd"></div> ${blockedLabel[lang]||blockedLabel.en}</div>
+    </div>`;
+  }
+
   popup.innerHTML = html;
 }
 
@@ -938,21 +1007,21 @@ function calNav(which, dir) {
 
 function calPick(which, year, month, day) {
   const date = new Date(year, month, day);
+
+  // Safety check: don't allow blocked dates
+  if (!isDateAllowed(date, riverEl.value)) return;
+
   calState[which].value = date;
 
-  // Update display button
-  const btn = document.getElementById(which + 'DateBtn');
   const span = document.getElementById(which + 'DateDisplay');
   span.textContent = fmt(date);
   span.classList.remove('placeholder');
-  btn.classList.add('has-value');
+  document.getElementById(which + 'DateBtn').classList.add('has-value');
 
-  // Update hidden input & trigger events
   const hidden = document.getElementById(which + 'Date');
   hidden.value = toISO(date);
   hidden.dispatchEvent(new Event('change'));
 
-  // If picking start, sync end calendar to same month and clear end if it's before start
   if (which === 'start') {
     calState.end.year = calState.start.year;
     calState.end.month = calState.start.month;
@@ -965,7 +1034,6 @@ function calPick(which, year, month, day) {
   }
 
   closeCals();
-  // Re-render both to show range highlight
   renderCal('start');
   renderCal('end');
 }
@@ -1003,12 +1071,65 @@ riverEl.addEventListener('change', () => {
   }
   updateBoatCards(riverId);
   resetAvailability();
+
+  // NEW: clear dates if they're no longer valid for the new river
+  if (calState.start.value && !isDateAllowed(calState.start.value, riverId)) {
+    calState.start.value = null;
+    document.getElementById('startDateDisplay').textContent = document.getElementById('startDateDisplay').getAttribute('data-' + (window.currentLang||'lv'));
+    document.getElementById('startDateBtn').classList.remove('has-value');
+    document.getElementById('startDate').value = '';
+  }
+  if (calState.end.value && !isDateAllowed(calState.end.value, riverId)) {
+    calState.end.value = null;
+    document.getElementById('endDateDisplay').textContent = document.getElementById('endDateDisplay').getAttribute('data-' + (window.currentLang||'lv'));
+    document.getElementById('endDateBtn').classList.remove('has-value');
+    document.getElementById('endDate').value = '';
+  }
+  // Re-render calendars to show blocked dates for new river
+  renderCal('start');
+  renderCal('end');
 });
 
 routeEl.addEventListener('change', () => { checkAvailability(); });
-document.getElementById('startDate').addEventListener('change', () => { updateSummary(); checkAvailability(); });
+document.getElementById('startDate').addEventListener('change', () => {
+  updateSummary();
+  checkSeasonBlocking(); // NEW
+  checkAvailability();
+});
+document.getElementById('endDate').addEventListener('change', () => {
+  updateSummary();
+  checkSeasonBlocking(); // NEW
+  checkAvailability();
+});
 
-// Clear errors on input
+// NEW: Check if selected dates are within season and show message
+function checkSeasonBlocking() {
+  const riverId = riverEl.value;
+  const startVal = document.getElementById('startDate').value;
+  const endVal = document.getElementById('endDate').value;
+  if (!riverId || !startVal || !endVal) return;
+
+  const start = new Date(startVal);
+  const end = new Date(endVal);
+
+  // Check every date in range
+  let current = new Date(start);
+  while (current <= end) {
+    if (!isDateAllowed(current, riverId)) {
+      availBar.className = 'availability-bar season-error';
+      availSpinner.style.display = 'none';
+      availText.textContent = '⚠ ' + getSeasonMessage(riverId);
+      submitBtn.disabled = true;
+      return;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  // All dates are fine, clear any season error
+  if (availBar.classList.contains('season-error')) {
+    resetAvailability();
+  }
+}
+
 ['firstName','lastName','email','phone'].forEach(id => {
   document.getElementById(id).addEventListener('input', function() {
     this.classList.remove('field-error');
@@ -1017,7 +1138,7 @@ document.getElementById('startDate').addEventListener('change', () => { updateSu
     if (err) err.classList.remove('show');
   });
 });
-document.getElementById('endDate').addEventListener('change', () => { updateSummary(); checkAvailability(); });
+
 document.getElementById('kayaks').addEventListener('input', () => { updateSummary(); checkAvailability(); });
 document.getElementById('canoes').addEventListener('input', () => { updateSummary(); checkAvailability(); });
 document.getElementById('rafts').addEventListener('input',  () => { updateSummary(); checkAvailability(); });
@@ -1062,6 +1183,9 @@ function checkAvailability() {
 }
 
 async function _checkAvailability() {
+  // Don't check availability if dates are season-blocked
+  if (availBar.classList.contains('season-error')) return;
+
   const hub = getSelectedHub();
   const kayaks = parseInt(document.getElementById('kayaks').value) || 0;
   const canoes = parseInt(document.getElementById('canoes').value) || 0;
@@ -1078,7 +1202,6 @@ async function _checkAvailability() {
     const res = await fetch(url);
     const data = await res.json();
     availSpinner.style.display = 'none';
-    // Set max on inputs = available stock (so browser prevents typing more)
     const maxK = (data.available_kayaks ?? 200);
     const maxC = (data.available_canoes ?? 200);
     const maxR = (data.available_rafts  ?? 200);
@@ -1115,7 +1238,6 @@ function scrollToEl(el) {
 
 function showFieldError(el, msg) {
   el.classList.add('field-error');
-  // For phone, attach to .phone-field-wrap; otherwise to .field container
   const container = el.closest('.field') || el.parentElement;
   let errEl = container.querySelector('.field-error-msg');
   if (!errEl) {
@@ -1140,6 +1262,7 @@ function validateForm() {
     phone: { lv:'Lūdzu, ievadiet derīgu tālruņa numuru', en:'Please enter a valid phone number', lt:'Įveskite galiojantį telefono numerį', et:'Sisestage kehtiv telefoninumber', fi:'Syötä kelvollinen puhelinnumero' },
     boats: { lv:'Lūdzu, izvēlieties vismaz vienu laivu', en:'Please select at least one boat', lt:'Pasirinkite bent vieną valtį', et:'Valige vähemalt üks paat', fi:'Valitse vähintään yksi vene' },
     dates: { lv:'Lūdzu, izvēlieties datumus', en:'Please select dates', lt:'Pasirinkite datas', et:'Valige kuupäevad', fi:'Valitse päivämäärät' },
+    season: { lv:'Šie datumi nav pieejami', en:'These dates are not available', lt:'Šios datos nepasiekiamos', et:'Need kuupäevad pole saadaval', fi:'Nämä päivämäärät eivät ole saatavilla' }
   };
   let firstError = null;
 
@@ -1152,7 +1275,6 @@ function validateForm() {
     }
   });
 
-  // Phone validation
   const phoneEl = document.getElementById('phone');
   const prefix = document.getElementById('prefixCode').textContent.trim();
   const digits = phoneEl.value.replace(/\D/g,'');
@@ -1162,7 +1284,6 @@ function validateForm() {
     if (!firstError) firstError = phoneEl;
   }
 
-  // River & route
   if (!riverEl.value) {
     showFieldError(riverEl, msgs.required[lang]);
     if (!firstError) firstError = riverEl;
@@ -1172,13 +1293,11 @@ function validateForm() {
     if (!firstError) firstError = routeEl;
   }
 
-  // Dates
   const startDate = document.getElementById('startDate').value;
   const endDate = document.getElementById('endDate').value;
   if (!startDate || !endDate) {
     const dateWrap = document.getElementById('startDateBtn');
     if (!firstError) firstError = dateWrap;
-    // show a simple message near date section
     let errEl = document.getElementById('dateError');
     if (!errEl) {
       errEl = document.createElement('div');
@@ -1188,9 +1307,32 @@ function validateForm() {
     }
     errEl.textContent = msgs.dates[lang];
     errEl.classList.add('show');
+  } else {
+    // NEW: Final season check on submit
+    if (riverEl.value) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      let current = new Date(start);
+      let seasonBlocked = false;
+      while (current <= end) {
+        if (!isDateAllowed(current, riverEl.value)) { seasonBlocked = true; break; }
+        current.setDate(current.getDate() + 1);
+      }
+      if (seasonBlocked) {
+        let errEl = document.getElementById('dateError');
+        if (!errEl) {
+          errEl = document.createElement('div');
+          errEl.id = 'dateError';
+          errEl.className = 'field-error-msg';
+          document.getElementById('startDateWrap').parentElement.parentElement.appendChild(errEl);
+        }
+        errEl.textContent = msgs.season[lang];
+        errEl.classList.add('show');
+        if (!firstError) firstError = document.getElementById('startDateBtn');
+      }
+    }
   }
 
-  // Boats
   const kayaks = parseInt(document.getElementById('kayaks').value) || 0;
   const canoes = parseInt(document.getElementById('canoes').value) || 0;
   const rafts  = parseInt(document.getElementById('rafts').value)  || 0;
@@ -1287,7 +1429,6 @@ document.getElementById('bookingForm').addEventListener('submit', async (e) => {
       const successEl = document.getElementById('successScreen');
       successEl.style.display = 'block';
       document.getElementById('confirmEmail').textContent = document.getElementById('email').value;
-      // Re-translate summary titles
       document.querySelectorAll('#successScreen [data-lv]').forEach(el => {
         const text = el.getAttribute('data-' + (window.currentLang||'lv')) || el.getAttribute('data-en');
         if (text) el.textContent = text;
@@ -1367,7 +1508,6 @@ document.addEventListener('click', e => {
 
 window.currentLang = 'lv';
 
-// SVG flags
 const flagSVGs = {
   LV: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 30" width="24" height="12" style="border-radius:2px"><rect width="60" height="30" fill="#9e3039"/><rect width="60" height="10" y="10" fill="#fff"/></svg>',
   LT: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 30" width="24" height="12" style="border-radius:2px"><rect width="60" height="10" fill="#fdb921"/><rect width="60" height="10" y="10" fill="#006a44"/><rect width="60" height="10" y="20" fill="#c1272d"/></svg>',
@@ -1406,41 +1546,26 @@ function getFlag(code) {
 }
 
 const countries = [
-  {name:'Latvia',code:'LV',prefix:'+371'},
-  {name:'Lithuania',code:'LT',prefix:'+370'},
-  {name:'Estonia',code:'EE',prefix:'+372'},
-  {name:'Finland',code:'FI',prefix:'+358'},
-  {name:'Sweden',code:'SE',prefix:'+46'},
-  {name:'Norway',code:'NO',prefix:'+47'},
-  {name:'Denmark',code:'DK',prefix:'+45'},
-  {name:'Germany',code:'DE',prefix:'+49'},
-  {name:'United Kingdom',code:'GB',prefix:'+44'},
-  {name:'Netherlands',code:'NL',prefix:'+31'},
-  {name:'Poland',code:'PL',prefix:'+48'},
-  {name:'Russia',code:'RU',prefix:'+7'},
-  {name:'Belarus',code:'BY',prefix:'+375'},
-  {name:'France',code:'FR',prefix:'+33'},
-  {name:'Italy',code:'IT',prefix:'+39'},
-  {name:'Spain',code:'ES',prefix:'+34'},
-  {name:'Austria',code:'AT',prefix:'+43'},
-  {name:'Switzerland',code:'CH',prefix:'+41'},
-  {name:'Belgium',code:'BE',prefix:'+32'},
-  {name:'Czech Republic',code:'CZ',prefix:'+420'},
-  {name:'Slovakia',code:'SK',prefix:'+421'},
-  {name:'Hungary',code:'HU',prefix:'+36'},
-  {name:'Romania',code:'RO',prefix:'+40'},
-  {name:'Ukraine',code:'UA',prefix:'+380'},
-  {name:'United States',code:'US',prefix:'+1'},
-  {name:'Canada',code:'CA',prefix:'+1'},
-  {name:'Australia',code:'AU',prefix:'+61'},
-  {name:'Japan',code:'JP',prefix:'+81'},
-  {name:'China',code:'CN',prefix:'+86'},
-  {name:'India',code:'IN',prefix:'+91'},
+  {name:'Latvia',code:'LV',prefix:'+371'},{name:'Lithuania',code:'LT',prefix:'+370'},
+  {name:'Estonia',code:'EE',prefix:'+372'},{name:'Finland',code:'FI',prefix:'+358'},
+  {name:'Sweden',code:'SE',prefix:'+46'},{name:'Norway',code:'NO',prefix:'+47'},
+  {name:'Denmark',code:'DK',prefix:'+45'},{name:'Germany',code:'DE',prefix:'+49'},
+  {name:'United Kingdom',code:'GB',prefix:'+44'},{name:'Netherlands',code:'NL',prefix:'+31'},
+  {name:'Poland',code:'PL',prefix:'+48'},{name:'Russia',code:'RU',prefix:'+7'},
+  {name:'Belarus',code:'BY',prefix:'+375'},{name:'France',code:'FR',prefix:'+33'},
+  {name:'Italy',code:'IT',prefix:'+39'},{name:'Spain',code:'ES',prefix:'+34'},
+  {name:'Austria',code:'AT',prefix:'+43'},{name:'Switzerland',code:'CH',prefix:'+41'},
+  {name:'Belgium',code:'BE',prefix:'+32'},{name:'Czech Republic',code:'CZ',prefix:'+420'},
+  {name:'Slovakia',code:'SK',prefix:'+421'},{name:'Hungary',code:'HU',prefix:'+36'},
+  {name:'Romania',code:'RO',prefix:'+40'},{name:'Ukraine',code:'UA',prefix:'+380'},
+  {name:'United States',code:'US',prefix:'+1'},{name:'Canada',code:'CA',prefix:'+1'},
+  {name:'Australia',code:'AU',prefix:'+61'},{name:'Japan',code:'JP',prefix:'+81'},
+  {name:'China',code:'CN',prefix:'+86'},{name:'India',code:'IN',prefix:'+91'},
 ];
 
 function renderCountries(list) {
   const el = document.getElementById('prefixList');
-  el.innerHTML = list.map(c => 
+  el.innerHTML = list.map(c =>
     `<div class="prefix-option" onclick="selectCountry('${c.prefix}','${c.code}')">
       ${getFlag(c.code)}
       <span>${c.name}</span>
@@ -1464,7 +1589,7 @@ function togglePrefixDropdown() {
 }
 
 function filterCountries(q) {
-  const filtered = countries.filter(c => 
+  const filtered = countries.filter(c =>
     c.name.toLowerCase().includes(q.toLowerCase()) || c.prefix.includes(q)
   );
   renderCountries(filtered);
