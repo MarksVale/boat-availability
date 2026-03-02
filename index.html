@@ -1090,7 +1090,25 @@ riverEl.addEventListener('change', () => {
   renderCal('end');
 });
 
-routeEl.addEventListener('change', () => { checkAvailability(); });
+routeEl.addEventListener('change', () => {
+  const route = allRoutes.find(r => r.id === routeEl.value);
+  updateStartTimes(route ? route.startTimes : []);
+  checkAvailability();
+});
+
+function updateStartTimes(times) {
+  const el = document.getElementById('startTime');
+  if (!times || times.length === 0) {
+    // fallback to default options
+    el.innerHTML = `<option value="09:00">09:00</option>
+      <option value="11:00" selected>11:00</option>
+      <option value="13:00">13:00</option>
+      <option value="15:00">15:00</option>
+      <option value="cits">Cits laiks</option>`;
+    return;
+  }
+  el.innerHTML = times.map((t, i) => `<option value="${t}"${i===0?' selected':''}>${t}</option>`).join('');
+}
 document.getElementById('startDate').addEventListener('change', () => {
   updateSummary();
   checkSeasonBlocking(); // NEW
