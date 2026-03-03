@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     const [riversData, routesData, boatTypesData, windowsData] = await Promise.all([
       fetchAirtable(RIVERS_TABLE, '{Active} = 1'),
       fetchAirtable(ROUTES_TABLE, '{Active} = 1'),
-      fetchAirtable(BOAT_TYPES_TABLE, '{Active} = 1'),
+      fetchAirtable(BOAT_TYPES_TABLE, ''),
       fetchAirtable(BOOKING_WINDOWS_TABLE, '')
     ]);
 
