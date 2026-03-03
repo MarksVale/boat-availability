@@ -56,8 +56,8 @@ export default async function handler(req, res) {
       .filter(([_, qty]) => parseInt(qty) > 0)
       .map(([boatTypeId, qty]) =>
         airtablePost(BOOKING_LINES_TABLE, {
-          'Booking': [{ id: bookingId }],
-          'Boat Type': [{ id: boatTypeId }],
+          'Booking': [bookingId],
+          'Boat Type': [boatTypeId],
           'Quantity': parseInt(qty)
         })
       );
