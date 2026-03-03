@@ -43,7 +43,6 @@ export default async function handler(req, res) {
       'Sākuma laiks': startTime || '',
       'Dienas': days,
       'Notes': notes || '',
-      'Cik cilvēku plānojat būt': totalSeats || 0,
       'Status': 'Pending'
     });
 
