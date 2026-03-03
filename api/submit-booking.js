@@ -51,6 +51,7 @@ export default async function handler(req, res) {
     const bookingId = bookingData.id;
 
     // Create booking lines
+    console.log('boatSelections:', JSON.stringify(boatSelections));
     const linePromises = Object.entries(boatSelections || {})
       .filter(([_, qty]) => parseInt(qty) > 0)
       .map(([boatTypeId, qty]) =>
