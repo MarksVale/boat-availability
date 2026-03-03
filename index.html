@@ -838,13 +838,15 @@ function updateBoatCards(riverId) {
   container.innerHTML = '';
 
   const river = allRivers.find(r => r.id === riverId);
-  // river.boatTypes contains category names e.g. ['Kayaks', 'Canoes']
+  console.log('river.boatTypes:', river?.boatTypes);
+  console.log('allBoatTypes categories:', allBoatTypes.map(bt => bt.category));
   const allowedCategories = (river && river.boatTypes && river.boatTypes.length > 0)
     ? river.boatTypes
     : null;
   const visibleTypes = allowedCategories
     ? allBoatTypes.filter(bt => allowedCategories.includes(bt.category))
     : allBoatTypes;
+  console.log('visibleTypes:', visibleTypes.length);
   const word = { lv: 'vietas', en: 'seats', et: 'kohta', fi: 'paikkaa', lt: 'vietos' };
 
   visibleTypes.forEach(bt => {
