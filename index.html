@@ -702,6 +702,10 @@
           <div class="summary-label" data-lv="Cena" data-en="Price" data-et="Hind" data-fi="Hinta" data-lt="Kaina">Cena</div>
           <div class="summary-value" id="totalPrice">€0</div>
         </div>
+        <div class="summary-item" id="transportRow" style="display:none">
+          <div class="summary-label" data-lv="Transports" data-en="Transport" data-et="Transport" data-fi="Kuljetus" data-lt="Transportas">Transports</div>
+          <div class="summary-value" id="transportCostDisplay">€0</div>
+        </div>
       </div>
     </div>
 
@@ -1174,7 +1178,23 @@ function updateSummary() {
 
   totalSeatsEl.textContent = totalSeats;
   totalDaysEl.textContent = days > 0 ? days : '--';
-  totalPriceEl.textContent = '€' + (totalCost * (days > 0 ? days : 0));
+
+  // Transport cost
+  const route = allRoutes.find(r => r.id === routeEl.value);
+  const baseTransport = route ? (route.transportCost || 0) : 0;
+  const totalBoats = getTotalBoatsSelected();
+  const transport = baseTransport > 0 ? baseTransport + (totalBoats < 3 && totalBoats > 0 ? 50 : 0) : 0;
+
+  const transportRow = document.getElementById('transportRow');
+  const transportDisplay = document.getElementById('transportCostDisplay');
+  if (transport > 0) {
+    transportDisplay.textContent = '€' + transport + (totalBoats < 3 && totalBoats > 0 ? ' (+€50 mazā grupa)' : '');
+    transportRow.style.display = 'block';
+  } else {
+    transportRow.style.display = 'none';
+  }
+
+  totalPriceEl.textContent = '€' + ((totalCost * (days > 0 ? days : 0)) + transport);
 }
 
 let availTimer = null;
@@ -1386,6 +1406,18 @@ function showBookingSummary() {
     rows += `<div class="booking-summary-row"><span>${bt.name}</span><span>${qty} × €${bt.price}/d × ${days}d = €${cost}</span></div>`;
   });
 
+  // Transport
+  const route = allRoutes.find(r => r.id === routeEl.value);
+  const baseTransport = route ? (route.transportCost || 0) : 0;
+  const totalBoats = getTotalBoatsSelected();
+  const transport = baseTransport > 0 ? baseTransport + (totalBoats < 3 && totalBoats > 0 ? 50 : 0) : 0;
+  if (transport > 0) {
+    const transportLabel = { lv: 'Transports', en: 'Transport', lt: 'Transportas', et: 'Transport', fi: 'Kuljetus' };
+    const surcharge = totalBoats < 3 ? ' (+€50)' : '';
+    rows += `<div class="booking-summary-row"><span>${transportLabel[lang] || 'Transports'}${surcharge}</span><span>€${transport}</span></div>`;
+    total += transport;
+  }
+
   document.getElementById('summaryRows').innerHTML = rows;
   document.getElementById('summaryTotal').textContent = '€' + total;
 }
@@ -1410,6 +1442,12 @@ document.getElementById('bookingForm').addEventListener('submit', async (e) => {
         startDate: document.getElementById('startDate').value,
         endDate: document.getElementById('endDate').value,
         boatSelections: getBoatSelections(),
+        transportCost: (() => {
+          const route = allRoutes.find(r => r.id === routeEl.value);
+          const base = route ? (route.transportCost || 0) : 0;
+          const boats = getTotalBoatsSelected();
+          return base > 0 ? base + (boats < 3 && boats > 0 ? 50 : 0) : 0;
+        })(),
         startTime: document.getElementById('startTime').value,
         notes: document.getElementById('notes').value
       })
