@@ -833,6 +833,7 @@ async function loadFormData() {
 }
 
 function updateBoatCards(riverId) {
+  console.log('updateBoatCards called, allBoatTypes:', allBoatTypes.length, 'riverId:', riverId);
   const container = document.getElementById('boatCardsContainer');
   container.innerHTML = '';
 
