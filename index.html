@@ -837,13 +837,8 @@ function updateBoatCards(riverId) {
   const container = document.getElementById('boatCardsContainer');
   container.innerHTML = '';
 
-  const river = allRivers.find(r => r.id === riverId);
-  // River has boatTypes as array of lowercase names — match against allBoatTypes
-  const allowedNames = (river && river.boatTypes && river.boatTypes.length > 0)
-    ? river.boatTypes
-    : allBoatTypes.map(bt => bt.name.toLowerCase());
-
-  const visibleTypes = allBoatTypes.filter(bt => allowedNames.includes(bt.name.toLowerCase()));
+  // Show all active boat types for now (river filtering can be added later via a name field)
+  const visibleTypes = allBoatTypes;
   const word = { lv: 'vietas', en: 'seats', et: 'kohta', fi: 'paikkaa', lt: 'vietos' };
 
   visibleTypes.forEach(bt => {
