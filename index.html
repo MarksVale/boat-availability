@@ -946,9 +946,9 @@ function renderCal(which) {
   const currentRiverId = riverEl.value;
 
   let html = `<div class="cal-header">
-    <button type="button" class="cal-nav" onclick="calNav(event,'${which}',-1)"><button type="button" class="cal-nav" onclick="calNav('${which}',-1)">&#8249;</button>#8249;</button>
+    <button type="button" class="cal-nav" onclick="calNav(event,'${which}',-1)">&#8249;</button>
     <span class="cal-month-label">${MONTHS[s.month]} ${s.year}</span>
-    <button type="button" class="cal-nav" onclick="calNav(event,'${which}',1)"><button type="button" class="cal-nav" onclick="calNav('${which}',1)">&#8250;</button>#8250;</button>
+    <button type="button" class="cal-nav" onclick="calNav(event,'${which}',1)">&#8250;</button>
   </div><div class="cal-grid">`;
 
   DOW.forEach(d => { html += `<div class="cal-dow">${d}</div>`; });
