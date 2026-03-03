@@ -683,7 +683,7 @@
         <label data-lv="Laivas" data-en="Boats" data-et="Paadid" data-fi="Veneet" data-lt="Valtys">Laivas <span class="req">*</span></label>
         <div class="boat-row">
 
-          <div id="boatCardsContainer"></div>
+          
 
         </div>
       </div>
@@ -837,8 +837,14 @@ function updateBoatCards(riverId) {
   const container = document.getElementById('boatCardsContainer');
   container.innerHTML = '';
 
-  // Show all active boat types for now (river filtering can be added later via a name field)
-  const visibleTypes = allBoatTypes;
+  const river = allRivers.find(r => r.id === riverId);
+  // river.boatTypes contains linked record IDs from Airtable
+  const allowedIds = (river && river.boatTypes && river.boatTypes.length > 0)
+    ? river.boatTypes
+    : null;
+  const visibleTypes = allowedIds
+    ? allBoatTypes.filter(bt => allowedIds.includes(bt.id))
+    : allBoatTypes;
   const word = { lv: 'vietas', en: 'seats', et: 'kohta', fi: 'paikkaa', lt: 'vietos' };
 
   visibleTypes.forEach(bt => {
