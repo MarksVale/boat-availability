@@ -65,7 +65,8 @@ export default async function handler(req, res) {
       name: r.fields['Route name'],
       riverId: r.fields['River']?.[0],
       hubName: r.fields['Starting Hub Lookup']?.[0] || '',
-      startTimes: r.fields['Start Times'] || []
+      startTimes: r.fields['Start Times'] || [],
+      transportCost: r.fields['Transport Cost'] || 0
     }));
 
     return res.status(200).json({ rivers, routes, boatTypes, boatTypeMap, bookingWindows });
