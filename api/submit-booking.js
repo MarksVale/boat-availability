@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { firstName, lastName, email, phone, riverId, routeId, startDate, endDate, boatSelections, startTime, notes } = req.body;
+  const { firstName, lastName, email, phone, riverId, routeId, startDate, endDate, boatSelections, totalSeats, startTime, notes } = req.body;
   // boatSelections: { [boatTypeId]: quantity }
 
   const start = new Date(startDate);
@@ -41,8 +41,9 @@ export default async function handler(req, res) {
       'Sākuma datums': startDate,
       'Beigu datums': endDate,
       'Sākuma laiks': startTime || '',
-      'Cik dienas plānojat airēt?': days,
+      'Dienas': days,
       'Notes': notes || '',
+      'Cik cilvēku plānojat būt': totalSeats || 0,
       'Status': 'Pending'
     });
 
@@ -52,17 +53,15 @@ export default async function handler(req, res) {
 
     // Create booking lines
     console.log('boatSelections:', JSON.stringify(boatSelections));
-    const linePromises = Object.entries(boatSelections || {})
-      .filter(([_, qty]) => parseInt(qty) > 0)
-      .map(([boatTypeId, qty]) =>
-        airtablePost(BOOKING_LINES_TABLE, {
-          'Booking': [bookingId],
-          'Boat Type': [boatTypeId],
-          'Quantity': parseInt(qty)
-        })
-      );
-
-    await Promise.all(linePromises);
+    for (const [boatTypeId, qty] of Object.entries(boatSelections || {})) {
+      if (parseInt(qty) <= 0) continue;
+      const lineResult = await airtablePost(BOOKING_LINES_TABLE, {
+        'Booking': [bookingId],
+        'Boat Type': [boatTypeId],
+        'Quantity': parseInt(qty)
+      });
+      console.log('Line created:', JSON.stringify(lineResult));
+    }
 
     return res.status(200).json({ success: true, id: bookingId });
 
