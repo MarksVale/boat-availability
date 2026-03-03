@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     const [riversData, routesData, boatTypesData, windowsData] = await Promise.all([
       fetchAirtable(RIVERS_TABLE, '{Active} = 1'),
       fetchAirtable(ROUTES_TABLE, '{Active} = 1'),
-      fetchAirtable(BOAT_TYPES_TABLE, ''),
+      fetchAirtable(BOAT_TYPES_TABLE, '{Active} = 1'),
       fetchAirtable(BOOKING_WINDOWS_TABLE, '')
     ]);
 
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     const rivers = (riversData.records || []).map(r => ({
       id: r.id,
       name: r.fields['River name'],
-      boatTypes: (r.fields['Boat Types'] || []).map(t => t.toLowerCase())
+      boatTypes: (r.fields['Boat Types'] || []) // linked record IDs
     }));
 
     const routes = (routesData.records || []).map(r => ({
