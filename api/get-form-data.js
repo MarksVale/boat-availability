@@ -21,28 +21,35 @@ export default async function handler(req, res) {
     const [riversData, routesData, boatTypesData, windowsData] = await Promise.all([
       fetchAirtable(RIVERS_TABLE, '{Active} = 1'),
       fetchAirtable(ROUTES_TABLE, '{Active} = 1'),
-      fetchAirtable(BOAT_TYPES_TABLE, ''),
+      fetchAirtable(BOAT_TYPES_TABLE, '{Active} = 1'),
       fetchAirtable(BOOKING_WINDOWS_TABLE, '')
     ]);
 
-    // Boat type map: lowercase name → { name, price, capacity }
+    // Boat types array with ID
+    const boatTypes = (boatTypesData.records || []).map(r => ({
+      id: r.id,
+      name: r.fields['Boat type name'],
+      price: r.fields['Price per day'] || 0,
+      capacity: r.fields['Seating Capacity'] || 1
+    }));
+
+    // Legacy boatTypeMap keyed by lowercase name
     const boatTypeMap = {};
-    (boatTypesData.records || []).forEach(r => {
-      const key = (r.fields['Boat type name'] || '').toLowerCase();
-      boatTypeMap[key] = {
-        name: r.fields['Boat type name'],
-        price: r.fields['Price per day'] || 0,
-        capacity: r.fields['Capacity'] || 1
+    boatTypes.forEach(bt => {
+      boatTypeMap[bt.name.toLowerCase()] = {
+        id: bt.id,
+        name: bt.name,
+        price: bt.price,
+        capacity: bt.capacity
       };
     });
 
-    // Booking windows: group by river ID
-    // Each window has: riverId, seasonOpen, seasonClose, type (Open/Closed)
+    // Booking windows
     const bookingWindows = (windowsData.records || []).map(r => ({
       riverId: (r.fields['Rivers'] || [])[0] || null,
-      seasonOpen: r.fields['Season Open'] || null,   // ISO date string e.g. "2026-05-01"
-      seasonClose: r.fields['Season Close'] || null, // ISO date string e.g. "2026-09-30"
-      type: r.fields['Blocked Dates'] || 'Open',     // "Open" or "Closed"
+      seasonOpen: r.fields['Season Open'] || null,
+      seasonClose: r.fields['Season Close'] || null,
+      type: r.fields['Blocked Dates'] || 'Open',
       notes: r.fields['Notes'] || ''
     })).filter(w => w.riverId);
 
@@ -60,7 +67,7 @@ export default async function handler(req, res) {
       startTimes: r.fields['Start Times'] || []
     }));
 
-    return res.status(200).json({ rivers, routes, boatTypeMap, bookingWindows });
+    return res.status(200).json({ rivers, routes, boatTypes, boatTypeMap, bookingWindows });
 
   } catch (err) {
     return res.status(500).json({ error: err.message });
