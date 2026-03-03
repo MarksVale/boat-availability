@@ -946,9 +946,9 @@ function renderCal(which) {
   const currentRiverId = riverEl.value;
 
   let html = `<div class="cal-header">
-    <button type="button" class="cal-nav" onclick="calNav('${which}',-1)">&#8249;</button>
+    <button type="button" class="cal-nav" onclick="calNav(event,'${which}',-1)"><button type="button" class="cal-nav" onclick="calNav('${which}',-1)">&#8249;</button>#8249;</button>
     <span class="cal-month-label">${MONTHS[s.month]} ${s.year}</span>
-    <button type="button" class="cal-nav" onclick="calNav('${which}',1)">&#8250;</button>
+    <button type="button" class="cal-nav" onclick="calNav(event,'${which}',1)"><button type="button" class="cal-nav" onclick="calNav('${which}',1)">&#8250;</button>#8250;</button>
   </div><div class="cal-grid">`;
 
   DOW.forEach(d => { html += `<div class="cal-dow">${d}</div>`; });
@@ -997,7 +997,8 @@ function renderCal(which) {
   popup.innerHTML = html;
 }
 
-function calNav(which, dir) {
+function calNav(e, which, dir) {
+  e.stopPropagation();
   const s = calState[which];
   s.month += dir;
   if (s.month > 11) { s.month = 0; s.year++; }
@@ -1216,13 +1217,13 @@ async function _checkAvailability() {
   availSpinner.style.display = 'block';
   availText.textContent = window.currentLang === 'en' ? 'Checking availability...' : 'Pārbaudam pieejamību...';
   try {
-    const url = API_BASE + '/check-availability?hub=' + encodeURIComponent(hub) + '&start_date=' + startVal + '&end_date=' + endVal;
+    const url = API_BASE + '/check-availability?start_date=' + startVal + '&end_date=' + endVal;
     const res = await fetch(url);
     const data = await res.json();
     availSpinner.style.display = 'none';
-    const maxK = (data.available_kayaks ?? 200);
-    const maxC = (data.available_canoes ?? 200);
-    const maxR = (data.available_rafts  ?? 200);
+    const avail = data.availability || {}; const maxK = avail['Kajaks Vista']?.available ?? 200;
+    const maxC = avail['Kanoe Loksija']?.available ?? 200;
+    const maxR = avail['Rafts']?.available ?? 200;
     document.getElementById('kayaks').max = maxK;
     document.getElementById('canoes').max = maxC;
     document.getElementById('rafts').max  = maxR;
