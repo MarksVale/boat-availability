@@ -25,7 +25,6 @@ export default async function handler(req, res) {
       fetchAirtable(BOOKING_WINDOWS_TABLE, '')
     ]);
 
-    // Boat types array with ID
     const boatTypes = (boatTypesData.records || []).map(r => ({
       id: r.id,
       name: r.fields['Boat type name'],
@@ -34,7 +33,6 @@ export default async function handler(req, res) {
       category: r.fields['Category'] || ''
     }));
 
-    // Legacy boatTypeMap keyed by lowercase name
     const boatTypeMap = {};
     boatTypes.forEach(bt => {
       boatTypeMap[bt.name.toLowerCase()] = {
@@ -45,7 +43,6 @@ export default async function handler(req, res) {
       };
     });
 
-    // Booking windows
     const bookingWindows = (windowsData.records || []).map(r => ({
       riverId: (r.fields['Rivers'] || [])[0] || null,
       seasonOpen: r.fields['Season Open'] || null,
@@ -56,8 +53,7 @@ export default async function handler(req, res) {
 
     const rivers = (riversData.records || []).map(r => ({
       id: r.id,
-      name: r.fields['River name'],
-      boatTypes: (r.fields['Boat Types'] || []).map(t => typeof t === 'object' ? t.name : t)
+      name: r.fields['River name']
     }));
 
     const routes = (routesData.records || []).map(r => ({
@@ -66,11 +62,11 @@ export default async function handler(req, res) {
       riverId: r.fields['River']?.[0],
       hubName: r.fields['Starting Hub Lookup']?.[0] || '',
       startTimes: r.fields['Start Times'] || [],
-      transportCost: r.fields['Transport Cost'] || 0
+      transportCost: r.fields['Transport Cost'] || 0,
+      boatTypeIds: r.fields['Boat Types'] || []  // array of Boat Type record IDs
     }));
 
     return res.status(200).json({ rivers, routes, boatTypes, boatTypeMap, bookingWindows });
-
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
