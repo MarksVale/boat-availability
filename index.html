@@ -756,10 +756,9 @@ const API_BASE = 'https://boat-availability.vercel.app/api';
 let allRivers = [];
 let allRoutes = [];
 let boatTypeMap = {};
-let allBoatTypes = []; // array of { id, name, price, capacity }
-let bookingWindows = []; // NEW: booking windows from Airtable
+let allBoatTypes = [];
+let bookingWindows = [];
 
-// Phone digit requirements per country code
 const phoneMinDigits = {
   '+371':8, '+370':8, '+372':7, '+358':9, '+46':7, '+47':8, '+45':8,
   '+49':10, '+44':10, '+31':9, '+48':9, '+7':10, '+375':9, '+33':9,
@@ -767,21 +766,17 @@ const phoneMinDigits = {
   '+36':9, '+40':9, '+380':9, '+1':10, '+61':9, '+81':10, '+86':11, '+91':10
 };
 
-// ── Booking Window Logic ─────────────────────────────────────
-// Returns true if a date is allowed for the currently selected river
 function isDateAllowed(date, riverId) {
-  if (!riverId) return true; // no river selected yet, allow all
+  if (!riverId) return true;
   const riverWindows = bookingWindows.filter(w => w.riverId === riverId);
-  if (riverWindows.length === 0) return true; // no windows defined = all dates open
+  if (riverWindows.length === 0) return true;
 
   const d = new Date(date);
   d.setHours(0,0,0,0);
 
-  // Check if date falls within any Open window
   const openWindows = riverWindows.filter(w => w.type === 'Open');
   const closedWindows = riverWindows.filter(w => w.type === 'Closed');
 
-  // If there are Open windows defined, date must be in at least one
   if (openWindows.length > 0) {
     const inOpenWindow = openWindows.some(w => {
       if (!w.seasonOpen || !w.seasonClose) return false;
@@ -792,7 +787,6 @@ function isDateAllowed(date, riverId) {
     if (!inOpenWindow) return false;
   }
 
-  // Even if in Open window, check if it's in a Closed window
   const inClosedWindow = closedWindows.some(w => {
     if (!w.seasonOpen || !w.seasonClose) return false;
     const open = new Date(w.seasonOpen); open.setHours(0,0,0,0);
@@ -824,7 +818,7 @@ async function loadFormData() {
     allRoutes = data.routes || [];
     boatTypeMap = data.boatTypeMap || {};
     allBoatTypes = data.boatTypes || [];
-    bookingWindows = data.bookingWindows || []; // NEW
+    bookingWindows = data.bookingWindows || [];
 
     const riverEl = document.getElementById('river');
     riverEl.innerHTML = '<option value="">-- Izveleties upi --</option>';
@@ -840,21 +834,19 @@ async function loadFormData() {
   }
 }
 
-function updateBoatCards(riverId) {
-  console.log('updateBoatCards called, allBoatTypes:', allBoatTypes.length, 'riverId:', riverId);
+// ── Boat Cards — filtered by route's boatTypeIds ─────────────
+function updateBoatCards(routeId) {
   const container = document.getElementById('boatCardsContainer');
   container.innerHTML = '';
 
-  const river = allRivers.find(r => r.id === riverId);
-  console.log('river.boatTypes:', river?.boatTypes);
-  console.log('allBoatTypes categories:', allBoatTypes.map(bt => bt.category));
-  const allowedCategories = (river && river.boatTypes && river.boatTypes.length > 0)
-    ? river.boatTypes
+  const route = allRoutes.find(r => r.id === routeId);
+  const allowedIds = (route && route.boatTypeIds && route.boatTypeIds.length > 0)
+    ? route.boatTypeIds
     : null;
-  const visibleTypes = allowedCategories
-    ? allBoatTypes.filter(bt => allowedCategories.includes(bt.category))
+  const visibleTypes = allowedIds
+    ? allBoatTypes.filter(bt => allowedIds.includes(bt.id))
     : allBoatTypes;
-  console.log('visibleTypes:', visibleTypes.length);
+
   const word = { lv: 'vietas', en: 'seats', et: 'kohta', fi: 'paikkaa', lt: 'vietos' };
 
   visibleTypes.forEach(bt => {
@@ -877,7 +869,7 @@ function updateBoatCards(riverId) {
     });
   });
 
-  document.getElementById('boatSection').style.display = riverId ? 'block' : 'none';
+  document.getElementById('boatSection').style.display = routeId ? 'block' : 'none';
 }
 
 function getBoatSelections() {
@@ -958,7 +950,6 @@ function renderCal(which) {
     const isStart = startVal && date.getTime() === startVal.getTime();
     const isEnd = endVal && date.getTime() === endVal.getTime();
     const inRange = startVal && endVal && date > startVal && date < endVal;
-    // NEW: check booking window
     const isBlocked = !isPast && !isDateAllowed(date, currentRiverId);
 
     let cls = 'cal-day';
@@ -977,12 +968,11 @@ function renderCal(which) {
 
   html += '</div>';
 
-  // Add legend if there are booking windows for this river
   const riverWindows = bookingWindows.filter(w => w.riverId === currentRiverId);
   if (riverWindows.length > 0) {
     const lang = window.currentLang || 'lv';
     const availLabel = { lv:'Pieejams', en:'Available', lt:'Pasiekiama', et:'Saadaval', fi:'Saatavilla' };
-    const blockedLabel = { lv:'Šie datumi nav pieejami', en:'These dates are not available', lt:'Šios datos nepasiekiamos', et:'Need kuupäevad pole saadaval', fi:'Nämä päivämäärät eivät ole saatavilla' };
+    const blockedLabel = { lv:'Nav pieejams', en:'Not available', lt:'Nepasiekiama', et:'Pole saadaval', fi:'Ei saatavilla' };
     html += `<div class="cal-legend">
       <div class="cal-legend-item"><div class="cal-legend-dot" style="background:var(--forest)"></div> ${availLabel[lang]||availLabel.en}</div>
       <div class="cal-legend-item"><div class="cal-legend-dot" style="background:#ddd"></div> ${blockedLabel[lang]||blockedLabel.en}</div>
@@ -1003,8 +993,6 @@ function calNav(e, which, dir) {
 
 function calPick(which, year, month, day) {
   const date = new Date(year, month, day);
-
-  // Safety check: don't allow blocked dates
   if (!isDateAllowed(date, riverEl.value)) return;
 
   calState[which].value = date;
@@ -1059,16 +1047,20 @@ riverEl.addEventListener('change', () => {
   const riverId = riverEl.value;
   routeEl.innerHTML = '<option value="">-- Izveleties marsrutu --</option>';
   routeEl.disabled = !riverId;
+
   if (riverId) {
     const riverRoutes = allRoutes.filter(r => r.riverId === riverId);
     riverRoutes.forEach(r => {
       routeEl.innerHTML += '<option value="' + r.id + '" data-hub="' + r.hubName + '">' + r.name + '</option>';
     });
   }
-  updateBoatCards(riverId);
+
+  // Hide boat cards until a route is selected
+  document.getElementById('boatSection').style.display = 'none';
+  document.getElementById('boatCardsContainer').innerHTML = '';
   resetAvailability();
 
-  // NEW: clear dates if they're no longer valid for the new river
+  // Clear dates if no longer valid for the new river
   if (calState.start.value && !isDateAllowed(calState.start.value, riverId)) {
     calState.start.value = null;
     document.getElementById('startDateDisplay').textContent = document.getElementById('startDateDisplay').getAttribute('data-' + (window.currentLang||'lv'));
@@ -1081,7 +1073,6 @@ riverEl.addEventListener('change', () => {
     document.getElementById('endDateBtn').classList.remove('has-value');
     document.getElementById('endDate').value = '';
   }
-  // Re-render calendars to show blocked dates for new river
   renderCal('start');
   renderCal('end');
 });
@@ -1089,13 +1080,13 @@ riverEl.addEventListener('change', () => {
 routeEl.addEventListener('change', () => {
   const route = allRoutes.find(r => r.id === routeEl.value);
   updateStartTimes(route ? route.startTimes : []);
+  updateBoatCards(routeEl.value);  // ← now triggered by route, not river
   checkAvailability();
 });
 
 function updateStartTimes(times) {
   const el = document.getElementById('startTime');
   if (!times || times.length === 0) {
-    // fallback to default options
     el.innerHTML = `<option value="09:00">09:00</option>
       <option value="11:00" selected>11:00</option>
       <option value="13:00">13:00</option>
@@ -1105,18 +1096,18 @@ function updateStartTimes(times) {
   }
   el.innerHTML = times.map((t, i) => `<option value="${t}"${i===0?' selected':''}>${t}</option>`).join('');
 }
+
 document.getElementById('startDate').addEventListener('change', () => {
   updateSummary();
-  checkSeasonBlocking(); // NEW
+  checkSeasonBlocking();
   checkAvailability();
 });
 document.getElementById('endDate').addEventListener('change', () => {
   updateSummary();
-  checkSeasonBlocking(); // NEW
+  checkSeasonBlocking();
   checkAvailability();
 });
 
-// NEW: Check if selected dates are within season and show message
 function checkSeasonBlocking() {
   const riverId = riverEl.value;
   const startVal = document.getElementById('startDate').value;
@@ -1125,8 +1116,6 @@ function checkSeasonBlocking() {
 
   const start = new Date(startVal);
   const end = new Date(endVal);
-
-  // Check every date in range
   let current = new Date(start);
   while (current <= end) {
     if (!isDateAllowed(current, riverId)) {
@@ -1138,7 +1127,6 @@ function checkSeasonBlocking() {
     }
     current.setDate(current.getDate() + 1);
   }
-  // All dates are fine, clear any season error
   if (availBar.classList.contains('season-error')) {
     resetAvailability();
   }
@@ -1152,10 +1140,6 @@ function checkSeasonBlocking() {
     if (err) err.classList.remove('show');
   });
 });
-
-// boat input listeners are added dynamically in updateBoatCards
-// boat input listeners are added dynamically in updateBoatCards
-// boat input listeners are added dynamically in updateBoatCards
 
 function getDays() {
   const sv = document.getElementById('startDate').value;
@@ -1187,7 +1171,6 @@ function updateSummary() {
   totalSeatsEl.textContent = totalSeats;
   totalDaysEl.textContent = days > 0 ? days : '--';
 
-  // Transport cost
   const route = allRoutes.find(r => r.id === routeEl.value);
   const baseTransport = route ? (route.transportCost || 0) : 0;
   const totalBoats = getTotalBoatsSelected();
@@ -1219,7 +1202,6 @@ function checkAvailability() {
 }
 
 async function _checkAvailability() {
-  // Don't check availability if dates are season-blocked
   if (availBar.classList.contains('season-error')) return;
 
   const startVal = document.getElementById('startDate').value;
@@ -1236,7 +1218,6 @@ async function _checkAvailability() {
     availSpinner.style.display = 'none';
     const avail = data.availability || {};
 
-    // Check each selected boat type against total fleet availability
     let allOk = true;
     document.querySelectorAll('#boatCardsContainer input[data-bt-id]').forEach(input => {
       const qty  = parseInt(input.value) || 0;
@@ -1346,7 +1327,6 @@ function validateForm() {
     errEl.textContent = msgs.dates[lang];
     errEl.classList.add('show');
   } else {
-    // NEW: Final season check on submit
     if (riverEl.value) {
       const start = new Date(startDate);
       const end = new Date(endDate);
@@ -1421,7 +1401,6 @@ function showBookingSummary() {
     rows += `<div class="booking-summary-row"><span>${bt.name}</span><span>${qty} × €${bt.price}/d × ${days}d = €${cost}</span></div>`;
   });
 
-  // Transport
   const route = allRoutes.find(r => r.id === routeEl.value);
   const baseTransport = route ? (route.transportCost || 0) : 0;
   const totalBoats = getTotalBoatsSelected();
