@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { firstName, lastName, email, phone, riverId, routeId, startDate, endDate, boatSelections, totalSeats, startTime, notes } = req.body;
+  const { firstName, lastName, email, phone, riverId, routeId, startDate, endDate, boatSelections, transportCost, startTime, notes } = req.body;
   // boatSelections: { [boatTypeId]: quantity }
 
   const start = new Date(startDate);
@@ -43,6 +43,7 @@ export default async function handler(req, res) {
       'Sākuma laiks': startTime || '',
       'Dienas': days,
       'Notes': notes || '',
+      'Transporta izmaksas': transportCost || 0,
       'Status': 'Pending'
     });
 
