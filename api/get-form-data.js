@@ -30,7 +30,8 @@ export default async function handler(req, res) {
       id: r.id,
       name: r.fields['Boat type name'],
       price: r.fields['Price per day'] || 0,
-      capacity: r.fields['Seating Capacity'] || 1
+      capacity: r.fields['Seating Capacity'] || 1,
+      category: r.fields['Category'] || ''
     }));
 
     // Legacy boatTypeMap keyed by lowercase name
@@ -56,7 +57,7 @@ export default async function handler(req, res) {
     const rivers = (riversData.records || []).map(r => ({
       id: r.id,
       name: r.fields['River name'],
-      boatTypes: (r.fields['Boat Types'] || []) // linked record IDs
+      boatTypes: (r.fields['Boat Types'] || []).map(t => typeof t === 'object' ? t.name : t)
     }));
 
     const routes = (routesData.records || []).map(r => ({
