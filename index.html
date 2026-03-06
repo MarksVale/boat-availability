@@ -707,14 +707,6 @@
           <div class="summary-value" id="transportCostDisplay">€0</div>
         </div>
       </div>
-      <div id="transportNote" style="display:none;margin-top:8px;font-size:0.78rem;color:#666;line-height:1.4"
-           data-lv="⚠ Transporta izmaksas ietver laivas nogādāšanu līdz upes sākumam. Mazām grupām (1–2 laivas) tiek piemērota €50 piemaksa."
-           data-en="⚠ Transport covers boat delivery to the river start. Small groups (1–2 boats) have a €50 surcharge."
-           data-lt="⚠ Transportas apima valtių pristatymą. Mažoms grupėms (1–2 valtys) taikomas €50 priedas."
-           data-et="⚠ Transport hõlmab paatide kohaletoimetamist. Väikestele gruppidele (1–2 paati) lisandub €50."
-           data-fi="⚠ Kuljetus sisältää veneiden toimituksen. Pienille ryhmille (1–2 venettä) lisätään €50.">
-        ⚠ Transporta izmaksas ietver laivas nogādāšanu līdz upes sākumam. Mazām grupām (1–2 laivas) tiek piemērota €50 piemaksa.
-      </div>
     </div>
 
     <!-- Notes -->
@@ -1055,12 +1047,10 @@ riverEl.addEventListener('change', () => {
     });
   }
 
-  // Hide boat cards until a route is selected
   document.getElementById('boatSection').style.display = 'none';
   document.getElementById('boatCardsContainer').innerHTML = '';
   resetAvailability();
 
-  // Clear dates if no longer valid for the new river
   if (calState.start.value && !isDateAllowed(calState.start.value, riverId)) {
     calState.start.value = null;
     document.getElementById('startDateDisplay').textContent = document.getElementById('startDateDisplay').getAttribute('data-' + (window.currentLang||'lv'));
@@ -1080,7 +1070,8 @@ riverEl.addEventListener('change', () => {
 routeEl.addEventListener('change', () => {
   const route = allRoutes.find(r => r.id === routeEl.value);
   updateStartTimes(route ? route.startTimes : []);
-  updateBoatCards(routeEl.value);  // ← now triggered by route, not river
+  updateBoatCards(routeEl.value);
+  updateSummary();
   checkAvailability();
 });
 
@@ -1155,6 +1146,11 @@ function getSelectedHub() {
   return opt ? opt.getAttribute('data-hub') : '';
 }
 
+function getTransportCost() {
+  const route = allRoutes.find(r => r.id === routeEl.value);
+  return route ? (route.transportCost || 0) : 0;
+}
+
 function updateSummary() {
   const days = getDays();
   let totalSeats = 0;
@@ -1171,25 +1167,14 @@ function updateSummary() {
   totalSeatsEl.textContent = totalSeats;
   totalDaysEl.textContent = days > 0 ? days : '--';
 
-  const route = allRoutes.find(r => r.id === routeEl.value);
-  const baseTransport = route ? (route.transportCost || 0) : 0;
-  const totalBoats = getTotalBoatsSelected();
-  const transport = baseTransport > 0 ? baseTransport + (totalBoats < 3 && totalBoats > 0 ? 50 : 0) : 0;
-
+  const transport = getTransportCost();
   const transportRow = document.getElementById('transportRow');
   const transportDisplay = document.getElementById('transportCostDisplay');
-  const transportNote = document.getElementById('transportNote');
   if (transport > 0) {
-    transportDisplay.textContent = '€' + transport + (totalBoats < 3 && totalBoats > 0 ? ' (+€50 mazā grupa)' : '');
+    transportDisplay.textContent = '€' + transport;
     transportRow.style.display = 'block';
-    if (transportNote) {
-      const txt = transportNote.getAttribute('data-' + (window.currentLang || 'lv')) || transportNote.getAttribute('data-lv');
-      if (txt) transportNote.textContent = txt;
-      transportNote.style.display = 'block';
-    }
   } else {
     transportRow.style.display = 'none';
-    if (transportNote) transportNote.style.display = 'none';
   }
 
   totalPriceEl.textContent = '€' + (totalCost * (days > 0 ? days : 0));
@@ -1378,6 +1363,7 @@ function showBookingSummary() {
     route:  { lv:'Maršruts', en:'Route', lt:'Maršrutas', et:'Marsruut', fi:'Reitti' },
     dates:  { lv:'Datumi', en:'Dates', lt:'Datos', et:'Kuupäevad', fi:'Päivämäärät' },
     days:   { lv:'Dienas', en:'Days', lt:'Dienos', et:'Päevad', fi:'Päivät' },
+    transport: { lv:'Transports', en:'Transport', lt:'Transportas', et:'Transport', fi:'Kuljetus' },
   };
 
   const riverName = riverEl.options[riverEl.selectedIndex]?.text || '';
@@ -1401,14 +1387,9 @@ function showBookingSummary() {
     rows += `<div class="booking-summary-row"><span>${bt.name}</span><span>${qty} × €${bt.price}/d × ${days}d = €${cost}</span></div>`;
   });
 
-  const route = allRoutes.find(r => r.id === routeEl.value);
-  const baseTransport = route ? (route.transportCost || 0) : 0;
-  const totalBoats = getTotalBoatsSelected();
-  const transport = baseTransport > 0 ? baseTransport + (totalBoats < 3 && totalBoats > 0 ? 50 : 0) : 0;
+  const transport = getTransportCost();
   if (transport > 0) {
-    const transportLabel = { lv: 'Transports', en: 'Transport', lt: 'Transportas', et: 'Transport', fi: 'Kuljetus' };
-    const surcharge = totalBoats < 3 ? ' (+€50)' : '';
-    rows += `<div class="booking-summary-row"><span>${transportLabel[lang] || 'Transports'}${surcharge}</span><span>€${transport}</span></div>`;
+    rows += `<div class="booking-summary-row"><span>${labels.transport[lang] || 'Transports'}</span><span>€${transport}</span></div>`;
     total += transport;
   }
 
@@ -1436,12 +1417,7 @@ document.getElementById('bookingForm').addEventListener('submit', async (e) => {
         startDate: document.getElementById('startDate').value,
         endDate: document.getElementById('endDate').value,
         boatSelections: getBoatSelections(),
-        transportCost: (() => {
-          const route = allRoutes.find(r => r.id === routeEl.value);
-          const base = route ? (route.transportCost || 0) : 0;
-          const boats = getTotalBoatsSelected();
-          return base > 0 ? base + (boats < 3 && boats > 0 ? 50 : 0) : 0;
-        })(),
+        transportCost: getTransportCost(),
         startTime: document.getElementById('startTime').value,
         notes: document.getElementById('notes').value
       })
