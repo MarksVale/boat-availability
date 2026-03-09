@@ -718,9 +718,27 @@
       </div>
     </div>
 
+    <div class="field" style="margin-bottom:16px;">
+      <label data-lv="Maksājuma veids" data-en="Payment Method" data-et="Makseviis" data-fi="Maksutapa" data-lt="Mokėjimo būdas">Maksājuma veids</label>
+      <div style="display:flex;gap:12px;margin-top:8px;">
+        <label style="flex:1;display:flex;align-items:center;gap:10px;padding:14px 16px;border:2px solid #ddd;border-radius:8px;cursor:pointer;transition:border-color 0.2s;" id="payOnlineLbl">
+          <input type="radio" name="paymentMethod" id="payOnline" value="Online" style="accent-color:var(--forest);width:18px;height:18px;">
+          <span>
+            <strong data-lv="Apmaksāt tiešsaistē" data-en="Pay Online" data-et="Maksa veebis" data-fi="Maksa verkossa" data-lt="Mokėti internetu">Apmaksāt tiešsaistē</strong>
+          </span>
+        </label>
+        <label style="flex:1;display:flex;align-items:center;gap:10px;padding:14px 16px;border:2px solid #ddd;border-radius:8px;cursor:pointer;transition:border-color 0.2s;" id="payCashLbl">
+          <input type="radio" name="paymentMethod" id="payCash" value="Cash" style="accent-color:var(--forest);width:18px;height:18px;">
+          <span>
+            <strong data-lv="Maksāt skaidrā naudā" data-en="Pay Cash" data-et="Maksa sularahas" data-fi="Maksa käteisellä" data-lt="Mokėti grynaisiais">Maksāt skaidrā naudā</strong>
+          </span>
+        </label>
+      </div>
+    </div>
+
     <div style="background:#f0f4ed;border-left:3px solid var(--forest);border-radius:8px;padding:16px 20px;margin-bottom:16px;font-size:0.85rem;color:#444;line-height:1.6;">
       <strong style="color:var(--forest);display:block;margin-bottom:4px;" data-lv="Kā notiek rezervācija?" data-en="How does the reservation work?" data-et="Kuidas broneerimine toimib?" data-fi="Miten varaus toimii?" data-lt="Kaip veikia rezervacija?">Kā notiek rezervācija?</strong>
-      <span data-lv="Pēc pieteikuma iesniegšanas mēs to izskatīsim un sazināsimies ar jums tuvākajā laikā. Jūs saņemsiet e-pasta apstiprinājumu ar maksājuma norādījumiem vai zvanu no mums, lai vienotos par detaļām." data-en="Once your request is submitted, we will review it and get back to you shortly. You will receive an email confirmation with payment instructions, or a call from us to sort out the details." data-et="Pärast taotluse esitamist vaatame selle läbi ja võtame teiega peagi ühendust. Saate e-posti kinnituse maksejuhistega või helistame teile üksikasjade kokkuleppimiseks." data-fi="Lähetyksen jälkeen käymme hakemuksesi läpi ja otamme sinuun yhteyttä pian. Saat sähköpostivahvistuksen maksutiedoilla tai soitamme sinulle yksityiskohtien sopimiseksi." data-lt="Pateikus užklausą, mes ją peržiūrėsime ir netrukus susisieksime su jumis. Gausite el. pašto patvirtinimą su mokėjimo instrukcijomis arba skambutį iš mūsų.">Pēc pieteikuma iesniegšanas mēs to izskatīsim un sazināsimies ar jums tuvākajā laikā. Jūs saņemsiet e-pasta apstiprinājumu ar maksājuma norādījumiem vai zvanu no mums, lai vienotos par detaļām.</span>
+      <span data-lv="Pēc pieteikuma iesniegšanas mēs to izskatīsim un sazināsimies ar jums tuvākajā laikā. Jūs saņemsiet e-pasta apstiprinājumu ar maksājuma norādījumiem vai zvanu no mums, lai vienotos par detaļām." data-en="Once your request is submitted, we will review it and get back to you shortly. You will receive an email confirmation with payment instructions, or a call from us to sort out the details." data-et="Pärast taotluse esitamist vaatame selle läbi ja võtame teiega peagi ühendust. Saate e-posti kinnituse maksejuhistega või helistame teile üksikasjade kokkuleppimiseks." data-fi="Lähetyksen jälkeen käymme hakemuksesi läbi ja otamme sinuun yhteyttä pian. Saat sähköpostivahvistuksen maksutiedoilla tai soitamme sinulle yksityiskohtien sopimiseksi." data-lt="Pateikus užklausą, mes ją peržiūrėsime ir netrukus susisieksime su jumis. Gausite el. pašto patvirtinimą su mokėjimo instrukcijomis arba skambutį iš mūsų.">Pēc pieteikuma iesniegšanas mēs to izskatīsim un sazināsimies ar jums tuvākajā laikā. Jūs saņemsiet e-pasta apstiprinājumu ar maksājuma norādījumiem vai zvanu no mums, lai vienotos par detaļām.</span>
     </div>
     <button type="submit" class="submit-btn" id="submitBtn" data-lv="Rezervēt" data-en="Book Now" data-et="Broneeri" data-fi="Varaa" data-lt="Rezervuoti">Rezervēt</button>
   </form>
@@ -891,6 +909,14 @@ const totalPriceEl = document.getElementById('totalPrice');
 const availBar = document.getElementById('availabilityBar');
 const availText = document.getElementById('availText');
 const availSpinner = document.getElementById('availSpinner');
+// Payment method highlight
+document.querySelectorAll('input[name="paymentMethod"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.getElementById('payOnlineLbl').style.borderColor = document.getElementById('payOnline').checked ? 'var(--forest)' : '#ddd';
+    document.getElementById('payCashLbl').style.borderColor = document.getElementById('payCash').checked ? 'var(--forest)' : '#ddd';
+  });
+});
+
 const submitBtn = document.getElementById('submitBtn');
 
 const today = new Date();
@@ -1419,7 +1445,8 @@ document.getElementById('bookingForm').addEventListener('submit', async (e) => {
         boatSelections: getBoatSelections(),
         transportCost: getTransportCost(),
         startTime: document.getElementById('startTime').value,
-        notes: document.getElementById('notes').value
+        notes: document.getElementById('notes').value,
+        paymentMethod: document.querySelector('input[name="paymentMethod"]:checked')?.value || 'Cash'
       })
     });
     const data = await res.json();
