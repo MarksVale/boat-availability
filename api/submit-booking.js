@@ -43,7 +43,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { firstName, lastName, email, phone, riverId, routeId, startDate, endDate,
-          boatSelections, transportCost, startTime, notes } = req.body;
+          boatSelections, transportCost, startTime, notes, paymentMethod } = req.body;
 
   const start = new Date(startDate);
   const end = new Date(endDate);
@@ -119,6 +119,7 @@ export default async function handler(req, res) {
       'Dienas': days,
       'Notes': notes || '',
       'Transporta izmaksas': transportCost || 0,
+      'Payment Method': paymentMethod ? { name: paymentMethod } : { name: 'Cash' },
       'Status': overbookedReason ? 'Overbooked' : 'Pending',
       ...(overbookedReason ? { 'Overbooking Reason': overbookedReason } : {})
     });
