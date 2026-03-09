@@ -51,14 +51,12 @@ export default async function handler(req, res) {
 
   try {
     // ── Step 1: Check stock & existing reservations for overbooking ──
-    // Get route to find hub
     const routeData = await airtableGet('tbl8OxvtV7vlgTCXe', `/${routeId}?fields[]=Starting Hub`);
     const hubId = routeData.fields?.['Starting Hub']?.[0];
 
     let overbookedReason = null;
 
     if (hubId) {
-      // Get boat stock at this hub
       const stockRecords = await getAllRecords(BOAT_STOCK_TABLE, ['Hub', 'Boat Type', 'Total Quantity']);
       const hubStock = {};
       for (const s of stockRecords) {
@@ -68,7 +66,6 @@ export default async function handler(req, res) {
         }
       }
 
-      // Get all other hubs stock as well (Sigulda can cover shortfalls)
       const totalStock = {};
       for (const s of stockRecords) {
         const btId = s.fields['Boat Type']?.[0];
@@ -76,12 +73,8 @@ export default async function handler(req, res) {
         if (btId) totalStock[btId] = (totalStock[btId] || 0) + qty;
       }
 
-      // Get existing reservations overlapping this date range
-      const allReservations = await getAllRecords(RESERVATIONS_TABLE, ['Booking', 'Hub']);
       const allResLines = await getAllRecords(RESERVATION_LINES_TABLE, ['Reservations', 'Boat Types', 'Quantity']);
 
-      // Build reserved qty per boat type across all hubs for overlapping dates
-      // (simplified: check total fleet usage)
       const reservedQty = {};
       for (const line of allResLines) {
         const btId = line.fields['Boat Types']?.[0];
@@ -89,7 +82,6 @@ export default async function handler(req, res) {
         if (btId) reservedQty[btId] = (reservedQty[btId] || 0) + qty;
       }
 
-      // Check each boat type in this booking
       const shortReasons = [];
       for (const [btId, qty] of Object.entries(boatSelections || {})) {
         if (parseInt(qty) <= 0) continue;
@@ -119,7 +111,7 @@ export default async function handler(req, res) {
       'Dienas': days,
       'Notes': notes || '',
       'Transporta izmaksas': transportCost || 0,
-      'Payment Method': paymentMethod ? { name: paymentMethod } : { name: 'Cash' },
+      'Payment Method': paymentMethod || 'Cash',
       'Status': overbookedReason ? 'Overbooked' : 'Pending',
       ...(overbookedReason ? { 'Overbooking Reason': overbookedReason } : {})
     });
