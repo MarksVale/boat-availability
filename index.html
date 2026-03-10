@@ -180,6 +180,15 @@
   .summary-label { font-size: 0.78rem; color: #666; margin-bottom: 4px; }
   .summary-value { font-family: 'Montserrat', sans-serif; font-size: 1.3rem; font-weight: 700; color: var(--forest); }
 
+  /* CHANGE 1: Disclaimer style */
+  .transport-disclaimer {
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 10px;
+    line-height: 1.5;
+    padding: 0 4px;
+  }
+
   .availability-bar {
     margin-top: 16px;
     padding: 12px 16px;
@@ -679,6 +688,7 @@
         </div>
       </div>
 
+      <!-- CHANGE 2: boatSection now hidden until both dates are selected (controlled in JS) -->
       <div class="field" id="boatSection" style="display:none">
         <label data-lv="Laivas" data-en="Boats" data-et="Paadid" data-fi="Veneet" data-lt="Valtys">Laivas <span class="req">*</span></label>
         <div class="boat-row" id="boatCardsContainer"></div>
@@ -707,6 +717,16 @@
           <div class="summary-value" id="transportCostDisplay">€0</div>
         </div>
       </div>
+
+      <!-- CHANGE 1: Transport disclaimer below the summary bar -->
+      <p class="transport-disclaimer"
+         data-lv="* Transporta izmaksas var mainīties atkarībā no laivu skaita un citiem faktoriem. Visas korekcijas jūs saņemsiet rezervācijas apstiprinājuma e-pastā."
+         data-en="* Transport costs may vary depending on the number of boats and other factors. Any adjustments will be included in your booking confirmation email."
+         data-et="* Transpordikulu võivad varieeruda sõltuvalt paatide arvust ja muudest teguritest. Kõik kohandused saadetakse broneeringu kinnituse e-kirjas."
+         data-fi="* Kuljetuskustannukset voivat vaihdella veneiden määrän ja muiden tekijöiden mukaan. Kaikki muutokset ilmoitetaan varausvahvistussähköpostissa."
+         data-lt="* Transporto išlaidos gali skirtis priklausomai nuo valčių skaičiaus ir kitų veiksnių. Visi patikslinimai bus nurodyti rezervacijos patvirtinimo el. laiške.">
+        * Transporta izmaksas var mainīties atkarībā no laivu skaita un citiem faktoriem. Visas korekcijas jūs saņemsiet rezervācijas apstiprinājuma e-pastā.
+      </p>
     </div>
 
     <!-- Notes -->
@@ -845,6 +865,7 @@ async function loadFormData() {
 }
 
 // ── Boat Cards — filtered by route's boatTypeIds ─────────────
+// CHANGE 2: updateBoatCards now also checks if dates are selected before showing
 function updateBoatCards(routeId) {
   const container = document.getElementById('boatCardsContainer');
   container.innerHTML = '';
@@ -879,7 +900,21 @@ function updateBoatCards(routeId) {
     });
   });
 
-  document.getElementById('boatSection').style.display = routeId ? 'block' : 'none';
+  // Only show boat section if a route is selected AND both dates are selected
+  maybeShowBoatSection();
+}
+
+// CHANGE 2: centralized function to decide boat section visibility
+function maybeShowBoatSection() {
+  const routeId = document.getElementById('route').value;
+  const startDate = document.getElementById('startDate').value;
+  const endDate = document.getElementById('endDate').value;
+  const boatSection = document.getElementById('boatSection');
+  if (routeId && startDate && endDate) {
+    boatSection.style.display = 'block';
+  } else {
+    boatSection.style.display = 'none';
+  }
 }
 
 function getBoatSelections() {
@@ -1114,15 +1149,18 @@ function updateStartTimes(times) {
   el.innerHTML = times.map((t, i) => `<option value="${t}"${i===0?' selected':''}>${t}</option>`).join('');
 }
 
+// CHANGE 2: date change listeners now also call maybeShowBoatSection
 document.getElementById('startDate').addEventListener('change', () => {
   updateSummary();
   checkSeasonBlocking();
   checkAvailability();
+  maybeShowBoatSection();
 });
 document.getElementById('endDate').addEventListener('change', () => {
   updateSummary();
   checkSeasonBlocking();
   checkAvailability();
+  maybeShowBoatSection();
 });
 
 function checkSeasonBlocking() {
