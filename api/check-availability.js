@@ -51,7 +51,10 @@ export default async function handler(req, res) {
     // Filter overlapping Customer reservations in JS (lookup fields can't be filtered in Airtable formulas)
     const overlappingResIds = new Set();
     for (const r of reservations) {
-      if (r.fields['Type']?.name !== 'Customer') continue;
+      // Skip Hold reservations
+      const typeVal = r.fields['Type'];
+      const typeName = typeof typeVal === 'string' ? typeVal : typeVal?.name;
+      if (typeName === 'Hold') continue;
 
       const startRaw = r.fields['Sākuma datums (from Booking)'];
       const endRaw = r.fields['Beigu datums (from Booking)'];
