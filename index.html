@@ -167,6 +167,15 @@
     padding: 10px;
   }
 
+  .boat-avail {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: none;
+  }
+  .boat-avail.low { color: #e65100; }
+  .boat-avail.ok  { color: var(--success); }
+
   .summary-bar {
     background: var(--sand);
     border-radius: 12px;
@@ -890,6 +899,7 @@ function updateBoatCards(routeId) {
         <div class="boat-price">€${bt.price}/dienā</div>
       </div>
       <div class="boat-desc">${bt.capacity} ${word[window.currentLang] || 'vietas'}</div>
+      <div class="boat-avail" id="avail-${bt.id}"></div>
       <input type="number" id="boat-${bt.id}" data-bt-id="${bt.id}" min="0" value="0" placeholder="0">
     `;
     container.appendChild(card);
@@ -1255,7 +1265,7 @@ async function _checkAvailability() {
 
   const startVal = document.getElementById('startDate').value;
   const endVal   = document.getElementById('endDate').value;
-  if (!startVal || !endVal || getTotalBoatsSelected() === 0) { resetAvailability(); return; }
+  if (!startVal || !endVal) { resetAvailability(); return; }
 
   availBar.className = 'availability-bar checking';
   availSpinner.style.display = 'block';
@@ -1267,15 +1277,35 @@ async function _checkAvailability() {
     availSpinner.style.display = 'none';
     const avail = data.availability || {};
 
-    let allOk = true;
+    const lang = window.currentLang || 'lv';
+    const availLabel = { lv: 'Pieejamas', en: 'Available', lt: 'Pasiekiama', et: 'Saadaval', fi: 'Saatavilla' };
+
+    // Update stock badges on every card
     document.querySelectorAll('#boatCardsContainer input[data-bt-id]').forEach(input => {
-      const qty  = parseInt(input.value) || 0;
       const btId = input.dataset.btId;
-      const bt   = allBoatTypes.find(b => b.id === btId);
-      if (!bt || qty <= 0) return;
       const availInfo = avail[btId] || {};
       const maxQty = availInfo.available ?? 999;
       input.max = maxQty;
+
+      const badge = document.getElementById('avail-' + btId);
+      if (badge) {
+        if (maxQty < 10) {
+          badge.textContent = availLabel[lang] + ': ' + maxQty;
+          badge.className = 'boat-avail ' + (maxQty <= 2 ? 'low' : 'ok');
+          badge.style.display = 'block';
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+    });
+
+    if (getTotalBoatsSelected() === 0) { resetAvailability(); return; }
+
+    let allOk = true;
+    document.querySelectorAll('#boatCardsContainer input[data-bt-id]').forEach(input => {
+      const qty  = parseInt(input.value) || 0;
+      if (qty <= 0) return;
+      const maxQty = parseInt(input.max) || 999;
       if (qty > maxQty) allOk = false;
     });
 
