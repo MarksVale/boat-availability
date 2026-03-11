@@ -1296,7 +1296,7 @@ async function _checkAvailability() {
       const badge = document.getElementById('avail-' + btId);
       const card  = document.getElementById('card-' + btId);
       if (badge) {
-        if (maxQty < 10) {
+        if (maxQty < 20) {
           badge.textContent = availLabel[lang] + ': ' + maxQty;
           badge.className = 'boat-avail ' + (maxQty <= 2 ? 'low' : 'ok');
           badge.style.display = 'block';
@@ -1320,9 +1320,13 @@ async function _checkAvailability() {
       };
       const sa = getStock(a);
       const sb = getStock(b);
-      // 0 = out of stock → goes last; otherwise sort descending by stock
       if (sa === 0 && sb !== 0) return 1;
       if (sb === 0 && sa !== 0) return -1;
+      // Both non-zero: put low stock (under 20) after plentiful
+      const aLow = sa < 20;
+      const bLow = sb < 20;
+      if (aLow && !bLow) return 1;
+      if (bLow && !aLow) return -1;
       return sb - sa;
     });
     cards.forEach(card => container.appendChild(card));
