@@ -910,7 +910,12 @@ function updateBoatCards(routeId) {
     `;
     container.appendChild(card);
 
-    card.querySelector('input').addEventListener('input', () => {
+    card.querySelector('input').addEventListener('input', function() {
+      const max = parseInt(this.max);
+      if (!isNaN(max) && parseInt(this.value) > max) {
+        this.value = max;
+      }
+      if (parseInt(this.value) < 0) this.value = 0;
       updateSummary();
       checkAvailability();
     });
@@ -1292,6 +1297,11 @@ async function _checkAvailability() {
       const availInfo = avail[btId] || {};
       const maxQty = availInfo.available ?? 999;
       input.max = maxQty;
+      // Clamp current value if it exceeds new max
+      if (parseInt(input.value) > maxQty) {
+        input.value = maxQty;
+        updateSummary();
+      }
 
       const badge = document.getElementById('avail-' + btId);
       const card  = document.getElementById('card-' + btId);
@@ -1733,3 +1743,4 @@ selectCountry('+371', 'LV');
 </script>
 </body>
 </html>
+
