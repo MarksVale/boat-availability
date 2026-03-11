@@ -37,23 +37,24 @@ export default async function handler(req, res) {
       };
     }
 
-    // Get all reservations overlapping dates
-    const filter = `AND(IS_BEFORE({Sākuma datums (from Booking)}, "${end_date}"), IS_AFTER({Beigu datums (from Booking)}, "${start_date}"))`;
+    // Get all Customer reservations overlapping dates
+    // Overlap condition: res.startDate <= query.endDate AND res.endDate >= query.startDate
+    const filter = `AND({Type} = "Customer", NOT(IS_AFTER({Sākuma datums (from Booking)}, "${end_date}")), NOT(IS_BEFORE({Beigu datums (from Booking)}, "${start_date}")))`;
     const url = `https://api.airtable.com/v0/${BASE_ID}/${RESERVATIONS_TABLE}?filterByFormula=${encodeURIComponent(filter)}`;
     const resResponse = await fetch(url, { headers: { Authorization: `Bearer ${AIRTABLE_PAT}` } });
     const resData = await resResponse.json();
-    const reservationIds = (resData.records || []).map(r => r.id);
+    const reservationIds = new Set((resData.records || []).map(r => r.id));
 
     // Get reservation lines for these reservations
     const reserved = {}; // btId → qty
-    if (reservationIds.length > 0) {
-      const resLines = await fetchAll(RES_LINES_TABLE, ['Reservation', 'Boat Type', 'Quantity']);
+    if (reservationIds.size > 0) {
+      const resLines = await fetchAll(RES_LINES_TABLE, ['Reservations', 'Boat Types', 'Quantity']);
       for (const line of resLines) {
-        const resLink = line.fields['Reservation']?.[0];
-        const btLink  = line.fields['Boat Type']?.[0];
+        const resLink = line.fields['Reservations']?.[0];
+        const btLink  = line.fields['Boat Types']?.[0];
         const qty     = line.fields['Quantity'] || 0;
         if (!resLink || !btLink) continue;
-        if (!reservationIds.includes(resLink)) continue;
+        if (!reservationIds.has(resLink)) continue;
         reserved[btLink] = (reserved[btLink] || 0) + qty;
       }
     }
@@ -75,3 +76,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
