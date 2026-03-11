@@ -176,6 +176,12 @@
   .boat-avail.low { color: #e65100; }
   .boat-avail.ok  { color: var(--success); }
 
+  .boat-card.out-of-stock {
+    opacity: 0.45;
+    background: #fafafa;
+  }
+  .boat-card.out-of-stock input { pointer-events: none; background: #f0f0f0; }
+
   .summary-bar {
     background: var(--sand);
     border-radius: 12px;
@@ -1288,6 +1294,7 @@ async function _checkAvailability() {
       input.max = maxQty;
 
       const badge = document.getElementById('avail-' + btId);
+      const card  = document.getElementById('card-' + btId);
       if (badge) {
         if (maxQty < 10) {
           badge.textContent = availLabel[lang] + ': ' + maxQty;
@@ -1297,7 +1304,28 @@ async function _checkAvailability() {
           badge.style.display = 'none';
         }
       }
+      if (card) {
+        card.classList.toggle('out-of-stock', maxQty === 0);
+        if (maxQty === 0) input.value = 0;
+      }
     });
+
+    // Sort cards: available (≥1) first, low stock (1-2) middle, out of stock (0) last
+    const container = document.getElementById('boatCardsContainer');
+    const cards = Array.from(container.querySelectorAll('.boat-card'));
+    cards.sort((a, b) => {
+      const getStock = card => {
+        const input = card.querySelector('input[data-bt-id]');
+        return input ? (parseInt(input.max) ?? 999) : 999;
+      };
+      const sa = getStock(a);
+      const sb = getStock(b);
+      // 0 = out of stock → goes last; otherwise sort descending by stock
+      if (sa === 0 && sb !== 0) return 1;
+      if (sb === 0 && sa !== 0) return -1;
+      return sb - sa;
+    });
+    cards.forEach(card => container.appendChild(card));
 
     if (getTotalBoatsSelected() === 0) { resetAvailability(); return; }
 
