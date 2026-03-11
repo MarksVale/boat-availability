@@ -26,10 +26,13 @@ export default async function handler(req, res) {
   const { start_date, end_date } = req.query;
   if (!start_date || !end_date) return res.status(400).json({ error: 'Missing start_date or end_date' });
 
+  const queryStart = new Date(start_date);
+  const queryEnd = new Date(end_date);
+
   try {
     // Get total fleet per boat type
     const boatTypes = await fetchAll(BOAT_TYPES_TABLE, ['Boat type name', 'Total Fleet']);
-    const fleetMap = {}; // id → { name, total }
+    const fleetMap = {};
     for (const bt of boatTypes) {
       fleetMap[bt.id] = {
         name: bt.fields['Boat type name'],
@@ -37,25 +40,56 @@ export default async function handler(req, res) {
       };
     }
 
-    // Get all Customer reservations overlapping dates
-    // Overlap condition: res.startDate <= query.endDate AND res.endDate >= query.startDate
-    const filter = `AND({Type} = "Customer", NOT(IS_AFTER({Sākuma datums (from Booking)}, "${end_date}")), NOT(IS_BEFORE({Beigu datums (from Booking)}, "${start_date}")))`;
-    const url = `https://api.airtable.com/v0/${BASE_ID}/${RESERVATIONS_TABLE}?filterByFormula=${encodeURIComponent(filter)}`;
-    const resResponse = await fetch(url, { headers: { Authorization: `Bearer ${AIRTABLE_PAT}` } });
-    const resData = await resResponse.json();
-    const reservationIds = new Set((resData.records || []).map(r => r.id));
+    // Fetch all Customer reservations with their dates
+    const reservations = await fetchAll(RESERVATIONS_TABLE, [
+      'Type',
+      'Sākuma datums (from Booking)',
+      'Beigu datums (from Booking)',
+      'Reservation Lines'
+    ]);
 
-    // Get reservation lines for these reservations
-    const reserved = {}; // btId → qty
-    if (reservationIds.size > 0) {
+    // Filter overlapping Customer reservations in JS (lookup fields can't be filtered in Airtable formulas)
+    const overlappingResIds = new Set();
+    for (const r of reservations) {
+      if (r.fields['Type']?.name !== 'Customer') continue;
+
+      const startRaw = r.fields['Sākuma datums (from Booking)'];
+      const endRaw = r.fields['Beigu datums (from Booking)'];
+
+      // Lookup fields return nested objects — extract the actual date string
+      let resStart, resEnd;
+      if (Array.isArray(startRaw)) {
+        resStart = new Date(startRaw[0]);
+      } else if (startRaw?.valuesByLinkedRecordId) {
+        const vals = Object.values(startRaw.valuesByLinkedRecordId);
+        resStart = new Date(vals[0]?.[0]);
+      }
+      if (Array.isArray(endRaw)) {
+        resEnd = new Date(endRaw[0]);
+      } else if (endRaw?.valuesByLinkedRecordId) {
+        const vals = Object.values(endRaw.valuesByLinkedRecordId);
+        resEnd = new Date(vals[0]?.[0]);
+      }
+
+      if (!resStart || !resEnd || isNaN(resStart) || isNaN(resEnd)) continue;
+
+      // Overlap: resStart <= queryEnd AND resEnd >= queryStart
+      if (resStart <= queryEnd && resEnd >= queryStart) {
+        overlappingResIds.add(r.id);
+      }
+    }
+
+    // Sum reserved quantities from overlapping reservation lines
+    const reserved = {};
+    if (overlappingResIds.size > 0) {
       const resLines = await fetchAll(RES_LINES_TABLE, ['Reservations', 'Boat Types', 'Quantity']);
       for (const line of resLines) {
-        const resLink = line.fields['Reservations']?.[0];
-        const btLink  = line.fields['Boat Types']?.[0];
-        const qty     = line.fields['Quantity'] || 0;
-        if (!resLink || !btLink) continue;
-        if (!reservationIds.has(resLink)) continue;
-        reserved[btLink] = (reserved[btLink] || 0) + qty;
+        const resId = line.fields['Reservations']?.[0];
+        const btId = line.fields['Boat Types']?.[0];
+        const qty = line.fields['Quantity'] || 0;
+        if (!resId || !btId) continue;
+        if (!overlappingResIds.has(resId)) continue;
+        reserved[btId] = (reserved[btId] || 0) + qty;
       }
     }
 
@@ -76,4 +110,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
-
