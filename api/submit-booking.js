@@ -2,9 +2,9 @@ const AIRTABLE_PAT = process.env.AIRTABLE_PAT;
 const BASE_ID = 'appYaHUWSdtuUSeaB';
 const BOOKINGS_TABLE = 'tblXNo5L3RXt0fQVJ';
 const BOOKING_LINES_TABLE = 'tblW1pCMNNHvNszEw';
+const RESERVATIONS_TABLE = 'tblgrNXzhAyDx2JSM';
+const RES_LINES_TABLE = 'tblPYvExPEx5GIqgK';
 const BOAT_STOCK_TABLE = 'tblEBC4kim6uCheAX';
-const RESERVATIONS_TABLE = 'tblPYvExPEx5GIqgK';
-const RESERVATION_LINES_TABLE = 'tblPYvExPEx5GIqgK';
 
 async function airtableGet(tableId, params = '') {
   const res = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${tableId}${params}`, {
@@ -50,55 +50,55 @@ export default async function handler(req, res) {
   const days = Math.round((end - start) / 86400000) + 1;
 
   try {
-    // ── Step 1: Check stock & existing reservations for overbooking ──
-    const routeData = await airtableGet('tbl8OxvtV7vlgTCXe', `/${routeId}?fields[]=Starting Hub`);
-    const hubId = routeData.fields?.['Starting Hub']?.[0];
+    // ── Step 1: Get total fleet stock across all hubs per boat type ──
+    const stockRecords = await getAllRecords(BOAT_STOCK_TABLE, ['Boat Type', 'Total Quantity']);
+    const totalStock = {};
+    for (const s of stockRecords) {
+      const btId = s.fields['Boat Type']?.[0];
+      const qty = s.fields['Total Quantity'] || 0;
+      if (btId) totalStock[btId] = (totalStock[btId] || 0) + qty;
+    }
 
-    let overbookedReason = null;
+    // ── Step 2: Get confirmed reservations overlapping the requested dates ──
+    // A reservation overlaps if: startDate < res.endDate AND endDate > res.startDate
+    const filter = encodeURIComponent(
+      `AND(IS_BEFORE({Sākuma datums (from Booking)}, "${endDate}"), IS_AFTER({Beigu datums (from Booking)}, "${startDate}"), {Type} = "Customer")`
+    );
+    const resResponse = await fetch(
+      `https://api.airtable.com/v0/${BASE_ID}/${RESERVATIONS_TABLE}?filterByFormula=${filter}&fields[]=Reservation Lines`,
+      { headers: { Authorization: `Bearer ${AIRTABLE_PAT}` } }
+    );
+    const resData = await resResponse.json();
+    const overlappingResIds = new Set((resData.records || []).map(r => r.id));
 
-    if (hubId) {
-      const stockRecords = await getAllRecords(BOAT_STOCK_TABLE, ['Hub', 'Boat Type', 'Total Quantity']);
-      const hubStock = {};
-      for (const s of stockRecords) {
-        if (s.fields['Hub']?.[0] === hubId) {
-          const btId = s.fields['Boat Type']?.[0];
-          if (btId) hubStock[btId] = s.fields['Total Quantity'] || 0;
-        }
-      }
-
-      const totalStock = {};
-      for (const s of stockRecords) {
-        const btId = s.fields['Boat Type']?.[0];
-        const qty = s.fields['Total Quantity'] || 0;
-        if (btId) totalStock[btId] = (totalStock[btId] || 0) + qty;
-      }
-
-      const allResLines = await getAllRecords(RESERVATION_LINES_TABLE, ['Reservations', 'Boat Types', 'Quantity']);
-
-      const reservedQty = {};
-      for (const line of allResLines) {
+    // ── Step 3: Sum reserved quantities from overlapping reservation lines ──
+    const reservedQty = {};
+    if (overlappingResIds.size > 0) {
+      const resLines = await getAllRecords(RES_LINES_TABLE, ['Reservations', 'Boat Types', 'Quantity']);
+      for (const line of resLines) {
+        const resId = line.fields['Reservations']?.[0];
         const btId = line.fields['Boat Types']?.[0];
         const qty = line.fields['Quantity'] || 0;
-        if (btId) reservedQty[btId] = (reservedQty[btId] || 0) + qty;
-      }
-
-      const shortReasons = [];
-      for (const [btId, qty] of Object.entries(boatSelections || {})) {
-        if (parseInt(qty) <= 0) continue;
-        const needed = parseInt(qty);
-        const available = (totalStock[btId] || 0) - (reservedQty[btId] || 0);
-        if (available < needed) {
-          shortReasons.push(`Boat type ${btId}: need ${needed}, available ${available}`);
-        }
-      }
-
-      if (shortReasons.length > 0) {
-        overbookedReason = shortReasons.join('; ');
+        if (!resId || !btId) continue;
+        if (!overlappingResIds.has(resId)) continue;
+        reservedQty[btId] = (reservedQty[btId] || 0) + qty;
       }
     }
 
-    // ── Step 2: Create booking ──
-    const bookingData = await airtablePost(BOOKINGS_TABLE, {
+    // ── Step 4: Check for overbooking ──
+    const shortReasons = [];
+    for (const [btId, qty] of Object.entries(boatSelections || {})) {
+      if (parseInt(qty) <= 0) continue;
+      const needed = parseInt(qty);
+      const available = (totalStock[btId] || 0) - (reservedQty[btId] || 0);
+      if (available < needed) {
+        shortReasons.push(`Boat type ${btId}: need ${needed}, available ${available}`);
+      }
+    }
+    const overbookedReason = shortReasons.length > 0 ? shortReasons.join('; ') : null;
+
+    // ── Step 5: Create booking ──
+    const bookingFields = {
       'Vārds': firstName,
       'Uzvārds': lastName,
       'E-pasts': email,
@@ -113,13 +113,17 @@ export default async function handler(req, res) {
       'Transporta izmaksas': transportCost || 0,
       'Payment Method': paymentMethod || 'Cash',
       'Status': overbookedReason ? 'Overbooked' : 'Pending',
-      ...(overbookedReason ? { 'Overbooking Reason': overbookedReason } : {})
-    });
+    };
+    // Add overbooking reason to Notes if overbooked
+    if (overbookedReason) {
+      bookingFields['Notes'] = `[OVERBOOKED] ${overbookedReason}\n\n${notes || ''}`.trim();
+    }
 
+    const bookingData = await airtablePost(BOOKINGS_TABLE, bookingFields);
     if (!bookingData.id) return res.status(400).json({ error: bookingData.error?.message || JSON.stringify(bookingData) });
     const bookingId = bookingData.id;
 
-    // ── Step 3: Create booking lines ──
+    // ── Step 6: Create booking lines ──
     for (const [boatTypeId, qty] of Object.entries(boatSelections || {})) {
       if (parseInt(qty) <= 0) continue;
       await airtablePost(BOOKING_LINES_TABLE, {
