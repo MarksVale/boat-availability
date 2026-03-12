@@ -12,6 +12,7 @@ const TRANSFER_REQ_TABLE  = 'tblkcVaytjj43ziyq';
 const SIGULDA_HUB   = 'recrY7hXQJNKgfBYI';
 const MAZSALACA_HUB = 'recPMBRGRcejDTCkl';
 const STAICELE_HUB  = 'recF5fXgd6132Vn8B';
+const ALL_HUB_IDS   = [SIGULDA_HUB, MAZSALACA_HUB, STAICELE_HUB];
 
 const log = [];
 
@@ -141,7 +142,6 @@ async function syncReservations() {
     }
     log.push(`Synced reservation for booking ${booking.id}`);
   }
-
   log.push('--- syncReservations done ---');
 }
 
@@ -166,13 +166,13 @@ async function recalculateTransfers() {
     linesByBooking[bId].push({ boatTypeId: line.fields['Boat Type']?.[0], qty: line.fields['Quantity'] || 0 });
   }
 
-  // Build demand map
-  const demand = {};
+  // Build demand per hub per boat type per date — ALL hubs including Sigulda
+  const demand = {}; // hubId → boatTypeId → date → qty
   for (const booking of confirmedBookings) {
     const hubId = routeToHub[booking.fields['Route']?.[0]];
     const startDate = booking.fields['Sākuma datums'];
     const endDate = booking.fields['Beigu datums'];
-    if (!hubId || !startDate || !endDate || hubId === SIGULDA_HUB) continue;
+    if (!hubId || !startDate || !endDate) continue;
     for (const line of (linesByBooking[booking.id] || [])) {
       if (!line.boatTypeId || line.qty <= 0) continue;
       if (!demand[hubId]) demand[hubId] = {};
@@ -183,9 +183,9 @@ async function recalculateTransfers() {
     }
   }
 
-  // Load stock
+  // Load stock per hub per boat type
   const stockRecords = await fetchAll(BOAT_STOCK_TABLE, ['Hub', 'Boat Type', 'Total Quantity']);
-  const stock = {};
+  const stock = {}; // hubId → boatTypeId → qty
   for (const s of stockRecords) {
     const hubId = s.fields['Hub']?.[0];
     const btId = s.fields['Boat Type']?.[0];
@@ -194,7 +194,7 @@ async function recalculateTransfers() {
     stock[hubId][btId] = s.fields['Total Quantity'] || 0;
   }
 
-  // Load existing Pending TRs
+  // Load existing Pending TRs — key: `${destHubId}__${boatTypeId}`
   const existingTRs = await fetchAll(TRANSFER_REQ_TABLE, ['Boat Type', 'Source Hub', 'Destination Hub', 'Status']);
   const pendingTRs = {};
   for (const tr of existingTRs) {
@@ -207,38 +207,68 @@ async function recalculateTransfers() {
     pendingTRs[key].push(tr);
   }
 
-  // Calculate needed transfers
+  // Calculate needed transfers for ALL hubs
+  // For each hub with a shortfall, find the best source hub (most stock of that type)
   const neededTransfers = {};
+
   for (const [hubId, boatTypes] of Object.entries(demand)) {
     for (const [boatTypeId, dateDemand] of Object.entries(boatTypes)) {
       const hubStock = stock[hubId]?.[boatTypeId] || 0;
+
       let maxDemand = 0, earliestDate = null;
       for (const [date, qty] of Object.entries(dateDemand)) {
         if (qty > maxDemand || (qty === maxDemand && (!earliestDate || date < earliestDate))) {
           maxDemand = qty; earliestDate = date;
         }
       }
+
       const shortfall = maxDemand - hubStock;
       if (shortfall <= 0) continue;
+
+      // Find best source hub: most stock of this boat type, excluding the destination hub
+      let bestSourceHub = null;
+      let bestSourceStock = 0;
+      for (const candidateHubId of ALL_HUB_IDS) {
+        if (candidateHubId === hubId) continue;
+        const candidateStock = stock[candidateHubId]?.[boatTypeId] || 0;
+        if (candidateStock > bestSourceStock) {
+          bestSourceStock = candidateStock;
+          bestSourceHub = candidateHubId;
+        }
+      }
+
+      if (!bestSourceHub) {
+        log.push(`No source hub found for ${boatTypeId} → ${hubId} — nowhere to transfer from`);
+        continue;
+      }
+
       const key = `${hubId}__${boatTypeId}`;
-      neededTransfers[key] = { destHubId: hubId, boatTypeId, qty: shortfall, requiredByDate: earliestDate };
+      neededTransfers[key] = {
+        destHubId: hubId,
+        sourceHubId: bestSourceHub,
+        boatTypeId,
+        qty: shortfall,
+        requiredByDate: earliestDate
+      };
+      log.push(`Shortfall: hub=${hubId}, bt=${boatTypeId}, need=${maxDemand}, stock=${hubStock}, shortfall=${shortfall}, source=${bestSourceHub}`);
     }
   }
 
-  // Reconcile
+  // Reconcile: update existing Pending TRs or create new ones
   for (const [key, needed] of Object.entries(neededTransfers)) {
     const existing = pendingTRs[key];
     if (existing?.length > 0) {
       await atPatch(TRANSFER_REQ_TABLE, existing[0].id, {
         'Quantity Needed': needed.qty,
-        'Required By Date': needed.requiredByDate
+        'Required By Date': needed.requiredByDate,
+        'Source Hub': [needed.sourceHubId]
       });
       for (let i = 1; i < existing.length; i++) await atDelete(TRANSFER_REQ_TABLE, existing[i].id);
       log.push(`Updated TR for ${key}: qty=${needed.qty}`);
     } else {
       await atCreate(TRANSFER_REQ_TABLE, {
         'Boat Type': [needed.boatTypeId],
-        'Source Hub': [SIGULDA_HUB],
+        'Source Hub': [needed.sourceHubId],
         'Destination Hub': [needed.destHubId],
         'Quantity Needed': needed.qty,
         'Required By Date': needed.requiredByDate,
@@ -248,7 +278,7 @@ async function recalculateTransfers() {
     }
   }
 
-  // Delete no-longer-needed Pending TRs
+  // Delete Pending TRs no longer needed
   for (const [key, existing] of Object.entries(pendingTRs)) {
     if (!neededTransfers[key]) {
       for (const tr of existing) {
