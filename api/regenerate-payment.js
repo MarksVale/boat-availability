@@ -47,15 +47,13 @@ export default async function handler(req, res) {
   if (!bookingId) return res.status(400).json({ error: 'Missing bookingId' });
 
   try {
-    const resp = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${BOOKINGS_TABLE}/${bookingId}`, {
+    const resp = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${BOOKINGS_TABLE}/${bookingId}?returnFieldsByFieldId=true`, {
       headers: { Authorization: `Bearer ${AIRTABLE_PAT}` }
     });
     const record = await resp.json();
     if (!record.id) return res.status(404).json({ error: 'Booking not found' });
 
     const f = record.fields;
-    // DEBUG
-    return res.status(200).json({ debug: true, fields: Object.keys(f || {}), statusRaw: f?.[F_STATUS], fStatus: F_STATUS });
     const status = f[F_STATUS]?.name || f[F_STATUS];
     if (status !== 'Confirmed') {
       return res.status(400).json({ error: `Booking must be Confirmed, currently: ${status}` });
