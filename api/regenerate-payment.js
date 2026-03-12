@@ -100,7 +100,7 @@ export default async function handler(req, res) {
       fee_lines: [{
         name: 'Papildu maksa / Extra charge',
         total: String(net),
-        tax_class: 'standard'
+        tax_class: ''
       }],
       meta_data: [
         { key: 'booking_start', value: f[F_START_DATE] || '' },
@@ -112,7 +112,6 @@ export default async function handler(req, res) {
       ]
     });
 
-    if (!data.id) return res.status(500).json({ error: `WC failed: ${JSON.stringify(data).substring(0,300)}` });
     const paymentUrl = `${DOMAIN}/?order_id=${data.id}&order_key=${data.order_key}&amount=${net}`;
     const now = new Date().toLocaleDateString('lv-LV');
     const note = `[${now}] Extra charge payment link generated. Original boats: €${originalSumma.toFixed(2)}, new boats: €${currentSumma.toFixed(2)}, extra: €${net}. WC Order #${data.number}`;
