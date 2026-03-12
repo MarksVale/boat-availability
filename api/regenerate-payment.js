@@ -15,7 +15,6 @@ const F_PHONE          = 'fldXGrjDM0BpZ2wcA';
 const F_START_DATE     = 'fldkP75UtRxR0cEwC';
 const F_END_DATE       = 'fldmYhNlsp4ifS3uP';
 const F_PAYMENT_LINK   = 'fldEcUdqtf0dOws4K';
-const F_EXTRA_PAYMENT_LINK = 'fldVe5YvFKWi7a1EC';
 const F_NOTES          = 'fldpYRndrwPzE0YOg';
 const F_SUMMA          = 'fldOucFF4a7cZoF81'; // current Summa (boats only, no transport)
 const F_ORIGINAL_SUMMA = 'flds8H5omqyN9QW85'; // snapshot at first confirmation
@@ -113,7 +112,7 @@ export default async function handler(req, res) {
       ]
     });
 
-    const paymentUrl = `${DOMAIN}/?order_id=${data.id}&order_key=${data.order_key}&amount=${net}`;
+    const paymentUrl = `${DOMAIN}/checkout/order-pay/${data.id}/?pay_for_order=true&key=${data.order_key}`;
     const now = new Date().toLocaleDateString('lv-LV');
     const note = `[${now}] Extra charge payment link generated. Original boats: €${originalSumma.toFixed(2)}, new boats: €${currentSumma.toFixed(2)}, extra: €${net}. WC Order #${data.number}`;
     const existingNotes = f[F_NOTES] || '';
@@ -123,7 +122,7 @@ export default async function handler(req, res) {
       headers: { Authorization: `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         fields: {
-          [F_EXTRA_PAYMENT_LINK]: paymentUrl,
+          [F_PAYMENT_LINK]: paymentUrl,
           [F_NOTES]: existingNotes ? `${existingNotes}\n\n${note}` : note
         }
       })
