@@ -143,8 +143,8 @@ async function syncReservations() {
       });
     }
     // Write Original Summa once at first confirmation (never overwrite)
-    const currentSumma = record.fields?.[F_SUMMA];
-    const originalSumma = record.fields?.[F_ORIGINAL_SUMMA];
+    const currentSumma = booking.fields?.[F_SUMMA];
+    const originalSumma = booking.fields?.[F_ORIGINAL_SUMMA];
     if (currentSumma && !originalSumma) {
       await fetch(`https://api.airtable.com/v0/${BASE_ID}/${BOOKINGS_TABLE}/${booking.id}`, {
         method: 'PATCH',
