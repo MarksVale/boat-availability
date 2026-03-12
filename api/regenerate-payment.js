@@ -81,10 +81,7 @@ export default async function handler(req, res) {
       await fetch(`https://api.airtable.com/v0/${BASE_ID}/${BOOKINGS_TABLE}/${bookingId}`, {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: {
-          [F_NOTES]: existingNotes ? `${existingNotes}\n\n${note}` : note,
-          ...(difference < 0 ? { 'fld4j1aYCUn20EWLY': Math.abs(difference) } : {})
-        } })
+        body: JSON.stringify({ fields: { [F_NOTES]: existingNotes ? `${existingNotes}\n\n${note}` : note } })
       });
 
       return res.status(200).json({ success: true, difference, note, newPaymentLink: null });
@@ -127,6 +124,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         fields: {
           [F_PAYMENT_LINK]: paymentUrl,
+          'fldybxa2s09oaZY7D': parseFloat(net),
           [F_NOTES]: existingNotes ? `${existingNotes}\n\n${note}` : note
         }
       })
