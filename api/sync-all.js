@@ -153,17 +153,7 @@ async function syncReservations() {
       });
       log.push(`Wrote Original Summa ${currentSumma} for booking ${booking.id}`);
     }
-    // Write Original Summa once at first confirmation — never overwrite
-    const currentSumma = booking.fields?.['Summa'];
-    const originalSumma = booking.fields?.['Original Summa'];
-    if (currentSumma && !originalSumma) {
-      await fetch(`https://api.airtable.com/v0/${BASE_ID}/${BOOKINGS_TABLE}/${booking.id}`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: { 'Original Summa': parseFloat(currentSumma) } })
-      });
-      log.push(`Wrote Original Summa ${currentSumma} for booking ${booking.id}`);
-    }
+
     log.push(`Synced reservation for booking ${booking.id}`);
   }
   log.push('--- syncReservations done ---');
