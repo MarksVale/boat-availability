@@ -215,9 +215,11 @@ async function recalculateTransfers() {
   }
 
   // Delete all Pending TRs — we recalculate from scratch
+  // Status is a single-select field, returns an object {name: "Pending", ...}
   const existingTRs = await fetchAll(TRANSFER_REQ_TABLE, ['Status']);
   for (const tr of existingTRs) {
-    if (tr.fields['Status'] === 'Pending') {
+    const statusName = tr.fields['Status']?.name || tr.fields['Status'];
+    if (statusName === 'Pending') {
       await atDelete(TRANSFER_REQ_TABLE, tr.id);
     }
   }
