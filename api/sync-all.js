@@ -229,15 +229,18 @@ async function recalculateTransfers() {
     for (const [boatTypeId, dateDemand] of Object.entries(boatTypes)) {
       const hubStock = stock[hubId]?.[boatTypeId] || 0;
 
-      let maxDemand = 0, earliestDate = null;
+      let maxDemand = 0, earliestShortfallDate = null;
       for (const [date, qty] of Object.entries(dateDemand)) {
-        if (qty > maxDemand || (qty === maxDemand && (!earliestDate || date < earliestDate))) {
-          maxDemand = qty; earliestDate = date;
+        if (qty > maxDemand) maxDemand = qty;
+        // Track earliest date where demand exceeds current hub stock
+        if (qty > hubStock && (!earliestShortfallDate || date < earliestShortfallDate)) {
+          earliestShortfallDate = date;
         }
       }
 
       const shortfall = maxDemand - hubStock;
       if (shortfall <= 0) continue;
+      const earliestDate = earliestShortfallDate || Object.keys(dateDemand).sort()[0];
 
       // Find best source hub: most stock of this boat type, excluding the destination hub
       let bestSourceHub = null;
