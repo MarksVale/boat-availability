@@ -15,6 +15,7 @@ const F_PHONE          = 'fldXGrjDM0BpZ2wcA';
 const F_START_DATE     = 'fldkP75UtRxR0cEwC';
 const F_END_DATE       = 'fldmYhNlsp4ifS3uP';
 const F_PAYMENT_LINK   = 'fldEcUdqtf0dOws4K';
+const F_EXTRA_PAYMENT_LINK = 'fldVe5YvFKWi7a1EC';
 const F_NOTES          = 'fldpYRndrwPzE0YOg';
 const F_SUMMA          = 'fldOucFF4a7cZoF81'; // current Summa (boats only, no transport)
 const F_ORIGINAL_SUMMA = 'flds8H5omqyN9QW85'; // snapshot at first confirmation
@@ -122,7 +123,7 @@ export default async function handler(req, res) {
       headers: { Authorization: `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         fields: {
-          [F_PAYMENT_LINK]: paymentUrl,
+          [F_EXTRA_PAYMENT_LINK]: paymentUrl,
           [F_NOTES]: existingNotes ? `${existingNotes}\n\n${note}` : note
         }
       })
