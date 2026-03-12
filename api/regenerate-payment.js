@@ -7,16 +7,17 @@ const BOOKING_PRODUCT_ID = 68;
 const BOOKINGS_TABLE = 'tblXNo5L3RXt0fQVJ';
 
 // Field IDs
-const F_STATUS            = 'fldV3sHYYHvcdOndw';
-const F_FIRST_NAME        = 'fldOxe3t6umlWtBMK';
-const F_LAST_NAME         = 'fldinxAnarkeAWiE8';
-const F_EMAIL             = 'fldp85n1qly0071N9';
-const F_PHONE             = 'fldXGrjDM0BpZ2wcA';
-const F_START_DATE        = 'fldkP75UtRxR0cEwC';
-const F_END_DATE          = 'fldmYhNlsp4ifS3uP';
-const F_PAYMENT_LINK      = 'fldEcUdqtf0dOws4K';
-const F_NOTES             = 'fldpYRndrwPzE0YOg';
-const F_EXTRA_CHARGE      = 'fldybxa2s09oaZY7D'; // <-- update after field created
+const F_STATUS         = 'fldV3sHYYHvcdOndw';
+const F_FIRST_NAME     = 'fldOxe3t6umlWtBMK';
+const F_LAST_NAME      = 'fldinxAnarkeAWiE8';
+const F_EMAIL          = 'fldp85n1qly0071N9';
+const F_PHONE          = 'fldXGrjDM0BpZ2wcA';
+const F_START_DATE     = 'fldkP75UtRxR0cEwC';
+const F_END_DATE       = 'fldmYhNlsp4ifS3uP';
+const F_PAYMENT_LINK   = 'fldEcUdqtf0dOws4K';
+const F_NOTES          = 'fldpYRndrwPzE0YOg';
+const F_SUMMA          = 'fldOucFF4a7cZoF81'; // current Summa (boats only, no transport)
+const F_ORIGINAL_SUMMA = 'flds8H5omqyN9QW85'; // snapshot at first confirmation
 
 async function wcRequest(path, method = 'GET', body = null) {
   const auth = Buffer.from(`${WC_CONSUMER_KEY}:${WC_CONSUMER_SECRET}`).toString('base64');
@@ -46,7 +47,6 @@ export default async function handler(req, res) {
   if (!bookingId) return res.status(400).json({ error: 'Missing bookingId' });
 
   try {
-    // Load booking
     const resp = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${BOOKINGS_TABLE}/${bookingId}`, {
       headers: { Authorization: `Bearer ${AIRTABLE_PAT}` }
     });
@@ -59,13 +59,36 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: `Booking must be Confirmed, currently: ${status}` });
     }
 
-    const extraCharge = parseFloat(f[F_EXTRA_CHARGE] || 0);
-    if (!extraCharge || extraCharge <= 0) {
-      return res.status(400).json({ error: 'Extra Charge Amount is empty or zero — fill it in first' });
+    const currentSumma = parseFloat(f[F_SUMMA] || 0);
+    const originalSumma = parseFloat(f[F_ORIGINAL_SUMMA] || 0);
+
+    if (!originalSumma) {
+      return res.status(400).json({
+        error: 'Original Summa is not set. This booking was confirmed before this feature existed — set it manually.',
+        currentSumma
+      });
     }
 
-    // Create WC order for the extra charge amount
-    const net = extraCharge.toFixed(2);
+    const difference = currentSumma - originalSumma;
+
+    if (difference <= 0) {
+      const now = new Date().toLocaleDateString('lv-LV');
+      const note = difference < 0
+        ? `[${now}] Boats reduced after confirmation. Original: €${originalSumma.toFixed(2)}, current: €${currentSumma.toFixed(2)}. ⚠️ REFUND NEEDED: €${Math.abs(difference).toFixed(2)} — handle manually.`
+        : `[${now}] Regenerate Payment clicked — no change in boat total (€${currentSumma.toFixed(2)}). No new payment needed.`;
+
+      const existingNotes = f[F_NOTES] || '';
+      await fetch(`https://api.airtable.com/v0/${BASE_ID}/${BOOKINGS_TABLE}/${bookingId}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { [F_NOTES]: existingNotes ? `${existingNotes}\n\n${note}` : note } })
+      });
+
+      return res.status(200).json({ success: true, difference, note, newPaymentLink: null });
+    }
+
+    // difference > 0 — create WC order for the extra amount
+    const net = difference.toFixed(2);
     const data = await wcRequest('/orders', 'POST', {
       status: 'pending',
       billing: {
@@ -84,28 +107,29 @@ export default async function handler(req, res) {
         { key: 'booking_start', value: f[F_START_DATE] || '' },
         { key: 'booking_end', value: f[F_END_DATE] || '' },
         { key: 'airtable_record_id', value: bookingId },
-        { key: 'extra_charge', value: 'true' }
+        { key: 'extra_charge', value: 'true' },
+        { key: 'original_summa', value: String(originalSumma) },
+        { key: 'new_summa', value: String(currentSumma) }
       ]
     });
 
     const paymentUrl = `${DOMAIN}/?order_id=${data.id}&order_key=${data.order_key}&amount=${net}`;
     const now = new Date().toLocaleDateString('lv-LV');
-    const noteAddition = `[${now}] Extra charge payment link generated: €${net}. WC Order #${data.number}`;
+    const note = `[${now}] Extra charge payment link generated. Original boats: €${originalSumma.toFixed(2)}, new boats: €${currentSumma.toFixed(2)}, extra: €${net}. WC Order #${data.number}`;
     const existingNotes = f[F_NOTES] || '';
 
-    // Save new payment link + note to booking
     await fetch(`https://api.airtable.com/v0/${BASE_ID}/${BOOKINGS_TABLE}/${bookingId}`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         fields: {
           [F_PAYMENT_LINK]: paymentUrl,
-          [F_NOTES]: existingNotes ? `${existingNotes}\n\n${noteAddition}` : noteAddition
+          [F_NOTES]: existingNotes ? `${existingNotes}\n\n${note}` : note
         }
       })
     });
 
-    return res.status(200).json({ success: true, paymentUrl, amount: net, wcOrderId: data.id });
+    return res.status(200).json({ success: true, difference, originalSumma, currentSumma, paymentUrl, wcOrderId: data.id });
 
   } catch (err) {
     return res.status(500).json({ error: err.message });
