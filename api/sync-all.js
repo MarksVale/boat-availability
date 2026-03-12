@@ -180,7 +180,7 @@ async function recalculateTransfers() {
     linesByBooking[bId].push({ boatTypeId: line.fields['Boat Type']?.[0], qty: line.fields['Quantity'] || 0 });
   }
 
-  // Build demand per hub per boat type per date — ALL hubs including Sigulda
+  // Build demand per hub per boat type per date
   const demand = {}; // hubId → boatTypeId → date → qty
   for (const booking of confirmedBookings) {
     const hubId = routeToHub[booking.fields['Route']?.[0]];
@@ -197,7 +197,7 @@ async function recalculateTransfers() {
     }
   }
 
-  // Load stock per hub per boat type
+  // Load stock per hub per boat type (current physical stock)
   const stockRecords = await fetchAll(BOAT_STOCK_TABLE, ['Hub', 'Boat Type', 'Total Quantity']);
   const stock = {}; // hubId → boatTypeId → qty
   for (const s of stockRecords) {
@@ -208,63 +208,71 @@ async function recalculateTransfers() {
     stock[hubId][btId] = s.fields['Total Quantity'] || 0;
   }
 
-  // Load existing TRs — both Pending (for reconcile) and Fulfilled (for stock accounting)
-  const existingTRs = await fetchAll(TRANSFER_REQ_TABLE, ['Boat Type', 'Source Hub', 'Destination Hub', 'Status', 'Quantity Needed']);
-  
-  // Fulfilled TRs already moved stock in Boat Stock table — stock reflects reality
-  // Pending TRs have NOT moved stock yet — we need to account for them as "incoming stock"
-  // so we don't double-create TRs for the same shortfall
-  const pendingIncoming = {}; // hubId → boatTypeId → qty already covered by pending TR
-  for (const tr of existingTRs) {
-    if (tr.fields['Status'] !== 'Pending') continue;
-    const btId = tr.fields['Boat Type']?.[0];
-    const destId = tr.fields['Destination Hub']?.[0];
-    const qty = tr.fields['Quantity Needed'] || 0;
-    if (!btId || !destId) continue;
-    if (!pendingIncoming[destId]) pendingIncoming[destId] = {};
-    pendingIncoming[destId][btId] = (pendingIncoming[destId][btId] || 0) + qty;
+  // Load ALL existing TRs
+  const existingTRs = await fetchAll(TRANSFER_REQ_TABLE, ['Boat Type', 'Source Hub', 'Destination Hub', 'Status', 'Quantity Needed', 'Required By Date']);
+
+  // Fulfilled TRs have already moved stock — we must reverse their effect to get
+  // the "base stock" at each hub, then simulate forward including fulfilled TRs.
+  // Simpler approach: use current stock as base, but add back pending TR outgoing
+  // quantities to source hubs (since pending TRs haven't moved stock yet).
+  // Then simulate day by day to find what transfers are still needed.
+
+  // Build a simulated stock that accounts for pending TRs already in the system
+  // (pending TRs haven't moved stock yet, so we treat them as already planned)
+  const simulatedStock = {}; // hubId → boatTypeId → qty (current stock + pending incoming)
+  for (const hubId of ALL_HUB_IDS) {
+    simulatedStock[hubId] = {};
+    for (const btId of Object.keys(stock[hubId] || {})) {
+      simulatedStock[hubId][btId] = stock[hubId][btId] || 0;
+    }
   }
 
-  const pendingTRs = {};
+  const pendingTRs = {}; // key destHub__btId → [tr records]
   for (const tr of existingTRs) {
     if (tr.fields['Status'] !== 'Pending') continue;
     const btId = tr.fields['Boat Type']?.[0];
     const destId = tr.fields['Destination Hub']?.[0];
+    const srcId = tr.fields['Source Hub']?.[0];
+    const qty = tr.fields['Quantity Needed'] || 0;
     if (!btId || !destId) continue;
+    // Add pending incoming to simulated stock at destination
+    if (!simulatedStock[destId]) simulatedStock[destId] = {};
+    simulatedStock[destId][btId] = (simulatedStock[destId][btId] || 0) + qty;
+    // Remove pending outgoing from source (it's committed to go)
+    if (srcId) {
+      if (!simulatedStock[srcId]) simulatedStock[srcId] = {};
+      simulatedStock[srcId][btId] = (simulatedStock[srcId][btId] || 0) - qty;
+    }
     const key = `${destId}__${btId}`;
     if (!pendingTRs[key]) pendingTRs[key] = [];
     pendingTRs[key].push(tr);
   }
 
-  // Calculate needed transfers for ALL hubs
-  // For each hub with a shortfall, find the best source hub (most stock of that type)
+  // Now calculate what transfers are STILL needed given simulatedStock
   const neededTransfers = {};
 
   for (const [hubId, boatTypes] of Object.entries(demand)) {
     for (const [boatTypeId, dateDemand] of Object.entries(boatTypes)) {
-      const hubStock = stock[hubId]?.[boatTypeId] || 0;
+      const effectiveStock = simulatedStock[hubId]?.[boatTypeId] || 0;
 
-      let maxDemand = 0, earliestShortfallDate = null;
+      let maxDemand = 0;
+      let earliestShortfallDate = null;
       for (const [date, qty] of Object.entries(dateDemand)) {
         if (qty > maxDemand) maxDemand = qty;
-        // Track earliest date where demand exceeds current hub stock
-        if (qty > hubStock && (!earliestShortfallDate || date < earliestShortfallDate)) {
+        if (qty > effectiveStock && (!earliestShortfallDate || date < earliestShortfallDate)) {
           earliestShortfallDate = date;
         }
       }
 
-      const alreadyCovered = pendingIncoming[hubId]?.[boatTypeId] || 0;
-      const effectiveStock = hubStock + alreadyCovered;
       const shortfall = maxDemand - effectiveStock;
       if (shortfall <= 0) continue;
-      const earliestDate = earliestShortfallDate || Object.keys(dateDemand).sort()[0];
 
-      // Find best source hub: most stock of this boat type, excluding the destination hub
+      // Find best source: hub with most available stock of this type (excluding destination)
       let bestSourceHub = null;
-      let bestSourceStock = 0;
+      let bestSourceStock = -Infinity;
       for (const candidateHubId of ALL_HUB_IDS) {
         if (candidateHubId === hubId) continue;
-        const candidateStock = stock[candidateHubId]?.[boatTypeId] || 0;
+        const candidateStock = simulatedStock[candidateHubId]?.[boatTypeId] || 0;
         if (candidateStock > bestSourceStock) {
           bestSourceStock = candidateStock;
           bestSourceHub = candidateHubId;
@@ -272,7 +280,7 @@ async function recalculateTransfers() {
       }
 
       if (!bestSourceHub) {
-        log.push(`No source hub found for ${boatTypeId} → ${hubId} — nowhere to transfer from`);
+        log.push(`No source hub found for ${boatTypeId} → ${hubId}`);
         continue;
       }
 
@@ -282,9 +290,9 @@ async function recalculateTransfers() {
         sourceHubId: bestSourceHub,
         boatTypeId,
         qty: shortfall,
-        requiredByDate: earliestDate
+        requiredByDate: earliestShortfallDate || Object.keys(dateDemand).sort()[0]
       };
-      log.push(`Shortfall: hub=${hubId}, bt=${boatTypeId}, need=${maxDemand}, stock=${hubStock}, shortfall=${shortfall}, source=${bestSourceHub}`);
+      log.push(`Shortfall: hub=${hubId}, bt=${boatTypeId}, need=${maxDemand}, effectiveStock=${effectiveStock}, shortfall=${shortfall}, source=${bestSourceHub}`);
     }
   }
 
@@ -324,6 +332,7 @@ async function recalculateTransfers() {
 
   log.push('--- recalculateTransfers done ---');
 }
+
 
 // ── HANDLER ──────────────────────────────────────────────────
 
