@@ -208,8 +208,23 @@ async function recalculateTransfers() {
     stock[hubId][btId] = s.fields['Total Quantity'] || 0;
   }
 
-  // Load existing Pending TRs — key: `${destHubId}__${boatTypeId}`
-  const existingTRs = await fetchAll(TRANSFER_REQ_TABLE, ['Boat Type', 'Source Hub', 'Destination Hub', 'Status']);
+  // Load existing TRs — both Pending (for reconcile) and Fulfilled (for stock accounting)
+  const existingTRs = await fetchAll(TRANSFER_REQ_TABLE, ['Boat Type', 'Source Hub', 'Destination Hub', 'Status', 'Quantity Needed']);
+  
+  // Fulfilled TRs already moved stock in Boat Stock table — stock reflects reality
+  // Pending TRs have NOT moved stock yet — we need to account for them as "incoming stock"
+  // so we don't double-create TRs for the same shortfall
+  const pendingIncoming = {}; // hubId → boatTypeId → qty already covered by pending TR
+  for (const tr of existingTRs) {
+    if (tr.fields['Status'] !== 'Pending') continue;
+    const btId = tr.fields['Boat Type']?.[0];
+    const destId = tr.fields['Destination Hub']?.[0];
+    const qty = tr.fields['Quantity Needed'] || 0;
+    if (!btId || !destId) continue;
+    if (!pendingIncoming[destId]) pendingIncoming[destId] = {};
+    pendingIncoming[destId][btId] = (pendingIncoming[destId][btId] || 0) + qty;
+  }
+
   const pendingTRs = {};
   for (const tr of existingTRs) {
     if (tr.fields['Status'] !== 'Pending') continue;
@@ -225,10 +240,7 @@ async function recalculateTransfers() {
   // For each hub with a shortfall, find the best source hub (most stock of that type)
   const neededTransfers = {};
 
-  const CENTRAL_HUB = 'recrY7hXQJNKgfBYI'; // Sigulda — never auto-generate TRs for central hub
-
   for (const [hubId, boatTypes] of Object.entries(demand)) {
-    if (hubId === CENTRAL_HUB) continue; // Sigulda never needs incoming auto TRs — return transfers are manual
     for (const [boatTypeId, dateDemand] of Object.entries(boatTypes)) {
       const hubStock = stock[hubId]?.[boatTypeId] || 0;
 
@@ -241,7 +253,9 @@ async function recalculateTransfers() {
         }
       }
 
-      const shortfall = maxDemand - hubStock;
+      const alreadyCovered = pendingIncoming[hubId]?.[boatTypeId] || 0;
+      const effectiveStock = hubStock + alreadyCovered;
+      const shortfall = maxDemand - effectiveStock;
       if (shortfall <= 0) continue;
       const earliestDate = earliestShortfallDate || Object.keys(dateDemand).sort()[0];
 
