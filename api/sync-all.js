@@ -8,6 +8,8 @@ const RESERVATIONS_TABLE  = 'tblgrNXzhAyDx2JSM';
 const RES_LINES_TABLE     = 'tblPYvExPEx5GIqgK';
 const BOAT_STOCK_TABLE    = 'tblEBC4kim6uCheAX';
 const TRANSFER_REQ_TABLE  = 'tblkcVaytjj43ziyq';
+const F_SUMMA          = 'fldOucFF4a7cZoF81';
+const F_ORIGINAL_SUMMA = 'flds8H5omqyN9QW85';
 
 const SIGULDA_HUB   = 'recrY7hXQJNKgfBYI';
 const MAZSALACA_HUB = 'recPMBRGRcejDTCkl';
@@ -70,7 +72,7 @@ async function atDelete(tableId, recordId) {
 async function syncReservations() {
   log.push('--- syncReservations start ---');
 
-  const bookings = await fetchAll(BOOKINGS_TABLE, ['Status', 'Route', 'Booking Lines']);
+  const bookings = await fetchAll(BOOKINGS_TABLE, ['Status', 'Route', 'Booking Lines', 'Summa', 'Original Summa']);
   const routes = await fetchAll(ROUTES_TABLE, ['Starting Hub']);
   const routeToHub = {};
   for (const r of routes) routeToHub[r.id] = r.fields['Starting Hub']?.[0] || null;
@@ -139,6 +141,28 @@ async function syncReservations() {
         'Boat Types': [line.boatTypeId],
         'Quantity': line.qty
       });
+    }
+    // Write Original Summa once at first confirmation (never overwrite)
+    const currentSumma = record.fields?.[F_SUMMA];
+    const originalSumma = record.fields?.[F_ORIGINAL_SUMMA];
+    if (currentSumma && !originalSumma) {
+      await fetch(`https://api.airtable.com/v0/${BASE_ID}/${BOOKINGS_TABLE}/${booking.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { [F_ORIGINAL_SUMMA]: parseFloat(currentSumma) } })
+      });
+      log.push(`Wrote Original Summa ${currentSumma} for booking ${booking.id}`);
+    }
+    // Write Original Summa once at first confirmation — never overwrite
+    const currentSumma = booking.fields?.['Summa'];
+    const originalSumma = booking.fields?.['Original Summa'];
+    if (currentSumma && !originalSumma) {
+      await fetch(`https://api.airtable.com/v0/${BASE_ID}/${BOOKINGS_TABLE}/${booking.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { 'Original Summa': parseFloat(currentSumma) } })
+      });
+      log.push(`Wrote Original Summa ${currentSumma} for booking ${booking.id}`);
     }
     log.push(`Synced reservation for booking ${booking.id}`);
   }
