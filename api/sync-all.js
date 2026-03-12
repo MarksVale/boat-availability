@@ -250,10 +250,13 @@ async function recalculateTransfers() {
       simStock[hubId] = physStock[hubId]?.[bt] || 0;
     }
 
+    log.push(`SIM bt=${bt} stock=${JSON.stringify(simStock)}`);
+
     for (const date of sortedDates) {
       for (const hubId of ALL_HUB_IDS) {
         const need = demand[hubId]?.[bt]?.[date] || 0;
         if (need <= 0) continue;
+        log.push(`  ${date} hub=${hubId} need=${need} stock=${simStock[hubId]}`);
         if (simStock[hubId] >= need) continue;
 
         const shortfall = need - simStock[hubId];
