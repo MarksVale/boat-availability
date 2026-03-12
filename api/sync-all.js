@@ -225,7 +225,10 @@ async function recalculateTransfers() {
   // For each hub with a shortfall, find the best source hub (most stock of that type)
   const neededTransfers = {};
 
+  const CENTRAL_HUB = 'recrY7hXQJNKgfBYI'; // Sigulda — never auto-generate TRs for central hub
+
   for (const [hubId, boatTypes] of Object.entries(demand)) {
+    if (hubId === CENTRAL_HUB) continue; // Sigulda never needs incoming auto TRs — return transfers are manual
     for (const [boatTypeId, dateDemand] of Object.entries(boatTypes)) {
       const hubStock = stock[hubId]?.[boatTypeId] || 0;
 
