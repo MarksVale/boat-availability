@@ -89,6 +89,9 @@ export default async function handler(req, res) {
 
     // difference > 0 — create WC order for the extra amount
     const net = difference.toFixed(2);
+    // Update product price first
+    await wcRequest(`/products/${BOOKING_PRODUCT_ID}`, 'PUT', { regular_price: String(net) });
+
     const data = await wcRequest('/orders', 'POST', {
       status: 'pending',
       billing: {
@@ -99,9 +102,7 @@ export default async function handler(req, res) {
       },
       line_items: [{
         product_id: BOOKING_PRODUCT_ID,
-        quantity: 1,
-        subtotal: String(net),
-        total: String(net)
+        quantity: 1
       }],
       meta_data: [
         { key: 'booking_start', value: f[F_START_DATE] || '' },
@@ -113,6 +114,7 @@ export default async function handler(req, res) {
       ]
     });
 
+    if (!data.id) throw new Error(`WC order creation failed: ${JSON.stringify(data)}`);
     const paymentUrl = `${DOMAIN}/?order_id=${data.id}&order_key=${data.order_key}&amount=${net}`;
     const now = new Date().toLocaleDateString('lv-LV');
     const note = `[${now}] Extra charge payment link generated. Original boats: €${originalSumma.toFixed(2)}, new boats: €${currentSumma.toFixed(2)}, extra: €${net}. WC Order #${data.number}`;
