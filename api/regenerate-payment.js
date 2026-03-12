@@ -97,10 +97,11 @@ export default async function handler(req, res) {
         email: f[F_EMAIL] || '',
         phone: f[F_PHONE] || ''
       },
-      fee_lines: [{
-        name: 'Papildu maksa / Extra charge',
-        total: String(net),
-        tax_class: ''
+      line_items: [{
+        product_id: BOOKING_PRODUCT_ID,
+        quantity: 1,
+        subtotal: String(net),
+        total: String(net)
       }],
       meta_data: [
         { key: 'booking_start', value: f[F_START_DATE] || '' },
@@ -112,7 +113,7 @@ export default async function handler(req, res) {
       ]
     });
 
-    const paymentUrl = `${DOMAIN}/checkout/order-pay/${data.id}/?pay_for_order=true&key=${data.order_key}`;
+    const paymentUrl = `${DOMAIN}/?order_id=${data.id}&order_key=${data.order_key}&amount=${net}`;
     const now = new Date().toLocaleDateString('lv-LV');
     const note = `[${now}] Extra charge payment link generated. Original boats: €${originalSumma.toFixed(2)}, new boats: €${currentSumma.toFixed(2)}, extra: €${net}. WC Order #${data.number}`;
     const existingNotes = f[F_NOTES] || '';
