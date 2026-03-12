@@ -1,4 +1,3 @@
-// v2
 const AIRTABLE_PAT = process.env.AIRTABLE_PAT;
 const WC_CONSUMER_KEY = process.env.WC_CONSUMER_KEY;
 const WC_CONSUMER_SECRET = process.env.WC_CONSUMER_SECRET;
@@ -55,6 +54,8 @@ export default async function handler(req, res) {
     if (!record.id) return res.status(404).json({ error: 'Booking not found' });
 
     const f = record.fields;
+    // DEBUG
+    return res.status(200).json({ debug: true, fields: Object.keys(f || {}), statusRaw: f?.[F_STATUS], fStatus: F_STATUS });
     const status = f[F_STATUS]?.name || f[F_STATUS];
     if (status !== 'Confirmed') {
       return res.status(400).json({ error: `Booking must be Confirmed, currently: ${status}` });
