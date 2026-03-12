@@ -83,7 +83,7 @@ export default async function handler(req, res) {
         headers: { Authorization: `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: {
           [F_NOTES]: existingNotes ? `${existingNotes}\n\n${note}` : note,
-          ...(difference < 0 ? { [F_REFUND_AMOUNT]: refundAmt } : {})
+          ...(difference < 0 ? { 'fld4j1aYCUn20EWLY': Math.abs(difference) } : {})
         } })
       });
 
