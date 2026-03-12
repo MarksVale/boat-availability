@@ -1,4 +1,3 @@
-// v3
 const AIRTABLE_PAT = process.env.AIRTABLE_PAT;
 const WC_CONSUMER_KEY = process.env.WC_CONSUMER_KEY;
 const WC_CONSUMER_SECRET = process.env.WC_CONSUMER_SECRET;
@@ -98,11 +97,10 @@ export default async function handler(req, res) {
         email: f[F_EMAIL] || '',
         phone: f[F_PHONE] || ''
       },
-      line_items: [{
-        product_id: BOOKING_PRODUCT_ID,
-        quantity: 1,
-        subtotal: String(net),
-        total: String(net)
+      fee_lines: [{
+        name: 'Papildu maksa / Extra charge',
+        total: String(net),
+        tax_class: 'standard'
       }],
       meta_data: [
         { key: 'booking_start', value: f[F_START_DATE] || '' },
