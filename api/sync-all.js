@@ -6,28 +6,10 @@ const BOOKING_LINES_TABLE = 'tblW1pCMNNHvNszEw';
 const ROUTES_TABLE        = 'tbl8OxvtV7vlgTCXe';
 const RESERVATIONS_TABLE  = 'tblgrNXzhAyDx2JSM';
 const RES_LINES_TABLE     = 'tblPYvExPEx5GIqgK';
-const BOAT_STOCK_TABLE    = 'tblEBC4kim6uCheAX';
-const TRANSFER_REQ_TABLE  = 'tblkcVaytjj43ziyq';
 const F_SUMMA          = 'fldOucFF4a7cZoF81';
 const F_ORIGINAL_SUMMA = 'flds8H5omqyN9QW85';
 
-const SIGULDA_HUB   = 'recrY7hXQJNKgfBYI';
-const MAZSALACA_HUB = 'recPMBRGRcejDTCkl';
-const STAICELE_HUB  = 'recF5fXgd6132Vn8B';
-const ALL_HUB_IDS   = [SIGULDA_HUB, MAZSALACA_HUB, STAICELE_HUB];
-
 const log = [];
-
-function dateRange(startStr, endStr) {
-  const dates = [];
-  const cur = new Date(startStr);
-  const end = new Date(endStr);
-  while (cur <= end) {
-    dates.push(cur.toISOString().slice(0, 10));
-    cur.setDate(cur.getDate() + 1);
-  }
-  return dates;
-}
 
 async function fetchAll(tableId, fields) {
   let records = [], offset;
@@ -45,15 +27,6 @@ async function fetchAll(tableId, fields) {
 async function atCreate(tableId, fields) {
   const resp = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${tableId}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields })
-  });
-  return resp.json();
-}
-
-async function atPatch(tableId, recordId, fields) {
-  const resp = await fetch(`https://api.airtable.com/v0/${BASE_ID}/${tableId}/${recordId}`, {
-    method: 'PATCH',
     headers: { Authorization: `Bearer ${AIRTABLE_PAT}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields })
   });
